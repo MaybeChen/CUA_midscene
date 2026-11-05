@@ -26,7 +26,7 @@ computer-use-component/
     └── schemas/
 ```
 
-构建脚本使用独立 staging，不会 prune 源码仓的 `node_modules`。`--output`、`--uv` 和 `--npm` 可覆盖默认路径与构建工具。
+构建脚本使用独立 staging，不会 prune 源码仓的 `node_modules`。工作台使用 `better-sqlite3` 保存流程卡片和访问记录，构建时单独准备并检查其原生模块。包含 `node_modules` 的组件应在目标操作系统和 CPU 架构上构建，并匹配宿主 Node ABI；不能将 Linux 构建的原生模块复制到 Windows 或直接用于不同 ABI 的 Electron。`--output`、`--uv` 和 `--npm` 可覆盖默认路径与构建工具。
 
 验证组件结构：
 

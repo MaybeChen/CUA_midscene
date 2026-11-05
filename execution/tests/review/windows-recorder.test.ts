@@ -42,8 +42,10 @@ test('WindowsRecorderManager 串行启动并通过 stdin 正常停止 Worker', a
   const outputRoot = path.join(fixture.root, 'recordings');
   await mkdir(outputRoot);
   const child = childProcess();
+  const completed: string[] = [];
   const spawnCalls: Array<{ command: string; args: readonly string[] }> = [];
   const manager = new WindowsRecorderManager({
+    onRecordingCompleted: id => completed.push(id),
     executionRoot: fixture.executionRoot,
     pythonExecutable: fixture.pythonExecutable,
     recordingsRoot: outputRoot,
@@ -71,6 +73,7 @@ test('WindowsRecorderManager 串行启动并通过 stdin 正常停止 Worker', a
   assert.equal(manager.status().phase, 'recording');
   assert.equal(manager.status().recordingId, 'Recording_test');
   assert.equal((await manager.stop()).phase, 'idle');
+  assert.deepEqual(completed, ['Recording_test']);
   assert.equal(spawnCalls[0]?.command, fixture.pythonExecutable);
   assert.deepEqual(spawnCalls[0]?.args.slice(0, 3), ['-m', 'cua_recorder', 'record']);
   await manager.close();
