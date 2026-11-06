@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import Mock, patch
 from fractions import Fraction
 
 import av
@@ -11,14 +14,34 @@ from cua_recorder.media import (
     H264_MF_GOP_SECONDS,
     MediaCapabilities,
     desktop_encoder_options,
+    capture_preview,
     prepare_video_frame,
     require_recording_capabilities,
     video_slot_at,
 )
 from cua_recorder.protocol import RecorderError
+from cua_recorder.models import DisplayInfo
 
 
 class MediaCapabilitiesTest(unittest.TestCase):
+    def test_preview_png_preserves_full_screen_resolution(self) -> None:
+        capabilities = MediaCapabilities("test", {}, True, True, True)
+        real_open = av.open
+        for width, height in [(1920, 1080), (1081, 1921)]:
+            with self.subTest(size=(width, height)), tempfile.TemporaryDirectory() as root:
+                display = DisplayInfo("screen", "DISPLAY1", 0, 0, 0, width, height, 1, True)
+                source = Mock()
+                source.decode.return_value = iter([av.VideoFrame(width, height, "rgb24")])
+                def open_capture(url, *args, **kwargs):
+                    return source if url == "desktop" else real_open(url, *args, **kwargs)
+                target = Path(root) / "screen.png"
+                with patch("cua_recorder.media.av.open", side_effect=open_capture):
+                    capture_preview(capabilities, display, target)
+                with real_open(str(target)) as image:
+                    frame = next(image.decode(video=0))
+                    self.assertEqual((width, height), (frame.width, frame.height))
+                source.close.assert_called_once()
+
     def test_desktop_encoder_targets_aloha_sized_vbr(self) -> None:
         self.assertEqual({
             "rate_control": "u_vbr",
