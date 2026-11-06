@@ -140,7 +140,7 @@ test('打开录制目录使用无 shell 系统命令', async t => {
     };
     setImmediate(() => {
       child.emit('spawn');
-      child.stdout.write(JSON.stringify({ directory: canonical, foregroundConfirmed: true }));
+      child.stdout.write(JSON.stringify({ directory: canonical, foregroundConfirmed: true, windowVisible: true }));
       child.emit('close', 0);
     });
     return child;
