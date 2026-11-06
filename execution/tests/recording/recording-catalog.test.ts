@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -115,7 +115,10 @@ test('录制详情与目录解析拒绝越界和不存在目标', async () => {
   await assert.rejects(resolveRecordingDirectory('missing', { recordingsRoot: root }), /录制目录不存在/);
 });
 
-test('打开录制目录使用无 shell 系统命令', async () => {
+test('打开录制目录使用无 shell 系统命令', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'recording-open-'));
+  const canonical = await realpath(directory);
+  t.after(() => rm(directory, { recursive: true, force: true }));
   const child = new EventEmitter() as EventEmitter & { unref(): void };
   child.unref = () => undefined;
   let invocation: {
@@ -138,11 +141,11 @@ test('打开录制目录使用无 shell 系统命令', async () => {
     setImmediate(() => { child.emit('spawn'); if (process.platform === 'win32') child.emit('close', 0); });
     return child;
   }) as unknown as typeof spawn;
-  await openRecordingDirectory('E:\\recordings\\demo', fakeSpawn);
+  await openRecordingDirectory(directory, fakeSpawn);
   assert.equal(invocation?.shell, false);
   assert.equal(invocation?.windowsHide, process.platform === 'win32');
   if (process.platform === 'win32') {
     assert.equal(invocation?.command, 'powershell.exe');
     assert.ok(invocation?.args.includes('-EncodedCommand'));
-  } else assert.deepEqual(invocation?.args, ['E:\\recordings\\demo']);
+  } else assert.deepEqual(invocation?.args, [canonical]);
 });

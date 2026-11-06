@@ -7,7 +7,7 @@ import { compileScript, parse } from 'vue/compiler-sfc';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { translate, useI18n } from '../../review/web/src/i18n.js';
 
-async function recordingSetup() {
+async function recordingSetup(cardId?: string) {
   const file = new URL('../../review/web/src/components/RecordingWorkspace.vue', import.meta.url);
   const source = await readFile(file, 'utf8');
   const compiled = compileScript(parse(source).descriptor, { id: 'skill-recording' });
@@ -16,7 +16,7 @@ async function recordingSetup() {
   const events: unknown[][] = [];
   const api = { createRecordingSkill: async (...args: unknown[]) => {
     calls.push(args); return { phase: 'running', recording: 'Recording_1' };
-  } };
+  }, openRecordingFolder: async (...args: unknown[]) => { calls.push(['open-folder', ...args]); return { opened: true }; } };
   const realRequire = createRequire(file);
   const load = (id: string) => {
     if (id === 'vue') return { ...vue, onMounted() {}, onUnmounted() {} };
@@ -29,7 +29,7 @@ async function recordingSetup() {
   const exports: { default?: { setup: (props: object, context: object) => any } } = {};
   new Function('require', 'exports', output)(load, exports);
   const scope = vue.effectScope();
-  const app = scope.run(() => exports.default!.setup({ skillsConfigured: true }, { expose() {}, emit: (...args: unknown[]) => events.push(args) }))!;
+  const app = scope.run(() => exports.default!.setup({ skillsConfigured: true, cardId }, { expose() {}, emit: (...args: unknown[]) => events.push(args) }))!;
   app.catalog.value = { configured: true, envName: 'CUA_RECORDINGS_ROOT', recordings: [{ id: 'Recording_1', ready: true, errors: [] }] };
   app.selectedId.value = 'Recording_1';
   return { app, calls, events, source, stop: () => scope.stop() };
@@ -81,4 +81,17 @@ test('生成说明使用 Skill 名称，目录标题使用界面语言', () => {
   }
   assert.equal(translate('zh-CN', 'review.catalog'), '技能');
   assert.equal(translate('en-US', 'review.catalog'), 'Skills');
+});
+
+test('录制页即使保留生成中状态也可打开目录，失败发出明确通知', async () => {
+  const setup = await recordingSetup('card-1');
+  try {
+    setup.app.generation.value = { phase: 'running', recording: 'Recording_1' };
+    await setup.app.openFolder();
+    assert.deepEqual(setup.calls, [['open-folder', 'Recording_1']]);
+    assert.equal(setup.app.opening.value, false);
+    setup.app.selectedId.value = 'missing';
+    await setup.app.openFolder();
+    assert.deepEqual(setup.events, [['folderError', '未找到当前录制，请刷新后重试']]);
+  } finally { setup.stop(); }
 });
