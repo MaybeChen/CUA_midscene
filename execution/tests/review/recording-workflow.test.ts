@@ -6,7 +6,7 @@ import { Writable } from 'node:stream';
 import test from 'node:test';
 import { prepareRecordingSkill, publishRecordingDraft } from '../../cua/skills/create.js';
 import { recordingSkillFixture, installImportedFixture } from '../helpers/skill-import-fixture.js';
-import { loadReviewSkill, saveReviewSkill } from '../../review/service/review-skill.js';
+import { loadReviewSkill, saveReviewSkill, loadPublishedSkillResult } from '../../review/service/review-skill.js';
 import { RecordingWorkflow } from '../../review/service/recording-workflow.js';
 import { RecordingCardStore } from '../../review/service/recording-cards.js';
 import { readSkill } from '../../cua/skills/assets.js';
@@ -55,6 +55,14 @@ test('分析只创建独立草稿，编辑后的 YAML 经原打包导入链路�
     1234,
   );
   assert.equal(calls, 1);
+  const summary = await loadPublishedSkillResult(fixture.skillsRoot, skillName);
+  assert.equal(summary.installPath, path.join(fixture.skillsRoot, skillName));
+  assert.equal(summary.origin, 'user');
+  assert.equal(summary.version, undefined);
+  const markdownPath = path.join(summary.installPath, 'SKILL.md');
+  await writeFile(markdownPath, summary.content.replace('---\n', '---\nversion: "2.3.4"\n'));
+  assert.equal((await loadPublishedSkillResult(fixture.skillsRoot, skillName)).version, '2.3.4');
+
   assert.equal(await readFile(path.join(fixture.recording, 'inputs', 'capture.mp4'), 'utf8'), 'original-video');
 });
 
