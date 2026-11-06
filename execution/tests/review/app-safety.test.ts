@@ -236,3 +236,17 @@ test('参考图冲突提示提供重新载入入口，使用已有草稿丢弃�
   assert.match(section, /@click="draftDiscardOpen = true"/);
   assert.ok(translate('en-US', 'review.referenceConflict').includes('reload'));
 });
+
+test('打开或切换录制步骤默认完整截图，仍允许手动选择局部截图', async () => {
+  const setup = await setupApp();
+  try {
+    const { app } = setup;
+    app.steps.value[0].evidence = { sourceStep: 1, timestamp: 0, full: 'source/full.png', crop: 'source/crop.png' };
+    app.populateEditor();
+    assert.equal(app.evidenceMode.value, 'full');
+    app.evidenceMode.value = 'crop';
+    assert.equal(app.evidenceMode.value, 'crop');
+    app.populateEditor();
+    assert.equal(app.evidenceMode.value, 'full');
+  } finally { setup.stop(); }
+});

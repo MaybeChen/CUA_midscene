@@ -1,3 +1,5 @@
+import io
+from contextlib import redirect_stdout
 import json
 import os
 import tempfile
@@ -7,6 +9,35 @@ from unittest.mock import Mock, patch
 
 from cua_record.resources import default_prompt_path
 from cua_record.trace_generator import TraceGenerator, env_bool
+
+
+class TraceProgressTest(unittest.TestCase):
+    def test_progress_counts_actions_and_metadata_without_reporting_failed_work(self):
+        for metadata_fails in (False, True):
+            with self.subTest(metadata_fails=metadata_fails), tempfile.TemporaryDirectory() as root:
+                source = Path(root) / "log.json"
+                source.write_text(json.dumps([
+                    {"action": "CONFIG"}, {"action": "Active Window: app"},
+                    {"action": "LClick", "timestamp": 1},
+                ]), encoding="utf-8")
+                generator = TraceGenerator.__new__(TraceGenerator)
+                generator._trace_step = Mock(return_value={"operation": {"type": "click"}})
+                generator.summarize_skill = Mock(return_value={"name": "demo"})
+                if metadata_fails:
+                    generator.summarize_skill.side_effect = RuntimeError("metadata failed")
+                output = io.StringIO()
+                with redirect_stdout(output), patch("cua_record.trace_generator.time.sleep"):
+                    if metadata_fails:
+                        with self.assertRaisesRegex(RuntimeError, "metadata failed"):
+                            generator.generate_trace(str(source), root, str(Path(root) / "trace.json"), generate_skill_metadata=True)
+                    else:
+                        generator.generate_trace(str(source), root, str(Path(root) / "trace.json"), generate_skill_metadata=True)
+                values = [json.loads(line.split(" ", 1)[1]) for line in output.getvalue().splitlines() if line.startswith("CUA_TRACE_PROGRESS ")]
+                expected = [{"completed": 0, "total": 2}, {"completed": 1, "total": 2}]
+                if not metadata_fails:
+                    expected.append({"completed": 2, "total": 2})
+                self.assertEqual(expected, values)
+                self.assertEqual(1, generator._trace_step.call_count)
 
 
 class StubTraceGenerator(TraceGenerator):
