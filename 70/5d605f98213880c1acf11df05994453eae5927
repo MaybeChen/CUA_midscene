@@ -1,0 +1,28 @@
+execution/review/web/src/assets/ucd/home-record-black.svg
+  h_da32729ff218bd 1-15
+execution/review/web/src/assets/ucd/record-back.svg
+  h_da32729ff218bd 1-57
+execution/review/web/src/assets/ucd/record-copy.svg
+  h_da32729ff218bd 1-25
+execution/review/web/src/assets/ucd/record-floder.svg
+  h_da32729ff218bd 1-5
+execution/review/web/src/assets/ucd/record-important.svg
+  h_da32729ff218bd 1-4
+execution/review/web/src/assets/ucd/record-play.svg
+  h_da32729ff218bd 1-5
+execution/review/web/src/assets/ucd/record-report.svg
+  h_da32729ff218bd 1-7
+execution/review/web/src/assets/ucd/record-warning.svg
+  h_da32729ff218bd 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5+huawei.3",
+  "base_commit_sha": "705d605f98213880c1acf11df05994453eae5927",
+  "prompts": {},
+  "humans": {
+    "h_da32729ff218bd": {
+      "author": "c30046905 <chenchao256@huawei.com>"
+    }
+  }
+}
