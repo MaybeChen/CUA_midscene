@@ -21,7 +21,8 @@ test('只能打开导入完成技能的正式目录，未知卡片和打开失�
     const card = cards.create({ name: '目录测试', description: '' });
     cards.beginRecording(card.id); cards.completeRecording('Recording_install');
     const opened: string[] = [];
-    const opener = async (directory: string) => { opened.push(directory); };
+    const receipt = { directory: expected, platform: process.platform, opener: 'windows-shell-foreground' as const, foregroundConfirmed: true };
+    const opener = async (directory: string) => { opened.push(directory); return receipt; };
     await assert.rejects(workflow.openInstallDirectory(card.id, opener), /尚未完成导入/);
     await assert.rejects(workflow.openInstallDirectory('missing-card', opener), /不存在/);
     assert.equal(opened.length, 0);
@@ -29,7 +30,7 @@ test('只能打开导入完成技能的正式目录，未知卡片和打开失�
     db.prepare('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)')
       .run(card.id, 'Recording_install', 'done', 'installed-demo', '', '', '');
     db.close();
-    assert.deepEqual(await workflow.openInstallDirectory(card.id, opener), { opened: true });
+    assert.deepEqual(await workflow.openInstallDirectory(card.id, opener), { opened: true, ...receipt, serverPid: process.pid });
     assert.deepEqual(opened, [expected]);
     await assert.rejects(workflow.openInstallDirectory(card.id, async () => { throw new Error('文件管理器启动失败'); }), /启动失败/);
   } finally { await workflow.close(); cards.close(); await rm(root, { recursive: true, force: true }); }

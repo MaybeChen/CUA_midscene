@@ -6,7 +6,7 @@ import test from 'node:test';
 import { openWindowsDirectory, foregroundDirectoryScript } from '../../cua/foreground-directory.js';
 
 function fixture(directory: string) {
-  const child = Object.assign(new EventEmitter(), { stderr: new PassThrough(), kill() {} });
+  const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill() {} });
   let launch: { command: string; args: readonly string[]; options: Record<string, any> } | undefined;
   const fakeSpawn = ((command: string, args: readonly string[], options: Record<string, any>) => {
     launch = { command, args, options }; return child;
@@ -29,8 +29,20 @@ test('打开目录等待前台激活确认，路径通过环境传递且不会�
   completion.then(() => { completed = true; });
   child.emit('spawn'); await new Promise(resolve => setImmediate(resolve));
   assert.equal(completed, false);
-  child.emit('close', 0); await completion;
+  child.stdout.write(JSON.stringify({ directory, foregroundConfirmed: true }));
+  child.emit('close', 0);
+  assert.deepEqual(await completion, { directory, foregroundConfirmed: true });
   assert.equal(completed, true);
+});
+
+test('进程退出成功但缺少确认或目标不匹配时不得报告打开成功', async () => {
+  const missing = fixture('C:\\recordings\\demo');
+  missing.child.emit('close', 0);
+  await assert.rejects(missing.completion, /未返回窗口前置确认/);
+  const wrong = fixture('C:\\recordings\\demo');
+  wrong.child.stdout.write(JSON.stringify({ directory: 'C:\\other', foregroundConfirmed: true }));
+  wrong.child.emit('close', 0);
+  await assert.rejects(wrong.completion, /不匹配/);
 });
 
 test('无法前置或启动文件管理器时保留失败原因', async () => {

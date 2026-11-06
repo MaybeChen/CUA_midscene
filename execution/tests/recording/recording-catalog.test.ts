@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { mkdir, realpath, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -119,8 +120,7 @@ test('打开录制目录使用无 shell 系统命令', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'recording-open-'));
   const canonical = await realpath(directory);
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const child = new EventEmitter() as EventEmitter & { unref(): void };
-  child.unref = () => undefined;
+  const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill() {} });
   let invocation: {
     command: string;
     args: readonly string[];
@@ -138,14 +138,40 @@ test('打开录制目录使用无 shell 系统命令', async t => {
       shell: options.shell,
       windowsHide: options.windowsHide,
     };
-    setImmediate(() => { child.emit('spawn'); if (process.platform === 'win32') child.emit('close', 0); });
+    setImmediate(() => {
+      child.emit('spawn');
+      child.stdout.write(JSON.stringify({ directory: canonical, foregroundConfirmed: true }));
+      child.emit('close', 0);
+    });
     return child;
   }) as unknown as typeof spawn;
-  await openRecordingDirectory(directory, fakeSpawn);
+  const result = await openRecordingDirectory(directory, fakeSpawn);
+  assert.equal(result.directory, canonical);
+  assert.equal(result.platform, process.platform);
+  assert.equal(result.foregroundConfirmed, process.platform === 'win32');
   assert.equal(invocation?.shell, false);
   assert.equal(invocation?.windowsHide, process.platform === 'win32');
   if (process.platform === 'win32') {
     assert.equal(invocation?.command, 'powershell.exe');
     assert.ok(invocation?.args.includes('-EncodedCommand'));
   } else assert.deepEqual(invocation?.args, [canonical]);
+});
+
+test('系统目录打开命令异常退出保留错误，不在进程启动时报告成功', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'recording-open-failure-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const child = Object.assign(new EventEmitter(), { stderr: new PassThrough(), kill() {} });
+  let launched!: () => void;
+  const launch = new Promise<void>(resolve => { launched = resolve; });
+  const fakeSpawn = (() => { launched(); return child; }) as unknown as typeof spawn;
+  let settled = false;
+  const completion = openRecordingDirectory(directory, fakeSpawn);
+  completion.then(() => { settled = true; }, () => { settled = true; });
+  await launch;
+  child.emit('spawn');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false);
+  child.stderr.write('桌面会话不可用');
+  child.emit('close', 1);
+  await assert.rejects(completion, /桌面会话不可用/);
 });
