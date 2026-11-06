@@ -135,11 +135,14 @@ test('打开录制目录使用无 shell 系统命令', async () => {
       shell: options.shell,
       windowsHide: options.windowsHide,
     };
-    setImmediate(() => child.emit('spawn'));
+    setImmediate(() => { child.emit('spawn'); if (process.platform === 'win32') child.emit('close', 0); });
     return child;
   }) as unknown as typeof spawn;
   await openRecordingDirectory('E:\\recordings\\demo', fakeSpawn);
   assert.equal(invocation?.shell, false);
-  assert.equal(invocation?.windowsHide, false);
-  assert.deepEqual(invocation?.args, ['E:\\recordings\\demo']);
+  assert.equal(invocation?.windowsHide, process.platform === 'win32');
+  if (process.platform === 'win32') {
+    assert.equal(invocation?.command, 'powershell.exe');
+    assert.ok(invocation?.args.includes('-EncodedCommand'));
+  } else assert.deepEqual(invocation?.args, ['E:\\recordings\\demo']);
 });

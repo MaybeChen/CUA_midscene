@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import type { spawn } from 'node:child_process';
+import test from 'node:test';
+import { openWindowsDirectory, foregroundDirectoryScript } from '../../cua/foreground-directory.js';
+
+function fixture(directory: string) {
+  const child = Object.assign(new EventEmitter(), { stderr: new PassThrough(), kill() {} });
+  let launch: { command: string; args: readonly string[]; options: Record<string, any> } | undefined;
+  const fakeSpawn = ((command: string, args: readonly string[], options: Record<string, any>) => {
+    launch = { command, args, options }; return child;
+  }) as unknown as typeof spawn;
+  const completion = openWindowsDirectory(directory, fakeSpawn);
+  return { child, completion, launch: launch! };
+}
+
+test('打开目录等待前台激活确认，路径通过环境传递且不会拼入PowerShell代码', async () => {
+  const directory = 'C:\\资料 & 测试\\$(not-a-command)';
+  const { child, completion, launch } = fixture(directory);
+  assert.equal(launch.command, 'powershell.exe');
+  assert.equal(launch.options.shell, false);
+  assert.equal(launch.options.windowsHide, true);
+  assert.equal(launch.options.env.CUA_OPEN_DIRECTORY, directory);
+  const script = Buffer.from(launch.args.at(-1)!, 'base64').toString('utf16le');
+  assert.equal(script, foregroundDirectoryScript);
+  assert.ok(!script.includes(directory));
+  let completed = false;
+  completion.then(() => { completed = true; });
+  child.emit('spawn'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(completed, false);
+  child.emit('close', 0); await completion;
+  assert.equal(completed, true);
+});
+
+test('无法前置或启动文件管理器时保留失败原因', async () => {
+  const failure = fixture('C:\\skills\\demo');
+  failure.child.stderr.write('窗口未能置于前台');
+  failure.child.emit('close', 1);
+  await assert.rejects(failure.completion, /窗口未能置于前台/);
+  const missing = fixture('C:\\skills\\demo');
+  missing.child.emit('error', new Error('ENOENT'));
+  await assert.rejects(missing.completion, /无法启动目录窗口.*ENOENT/);
+});
