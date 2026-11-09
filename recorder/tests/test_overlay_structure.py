@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from cua_recorder import overlay_win32
+from cua_recorder import overlay_guidance, overlay_win32
 from cua_recorder.models import DisplayInfo
 from cua_recorder.protocol import RecorderError
 
@@ -37,11 +37,12 @@ def drawing_api() -> SimpleNamespace:
 
 class OverlayStructureTest(unittest.TestCase):
     def test_every_overlay_function_has_at_most_fifty_lines(self) -> None:
-        source = Path(overlay_win32.__file__).read_text(encoding="utf-8")
-        for node in ast.walk(ast.parse(source)):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                with self.subTest(function=node.name):
-                    self.assertLessEqual(node.end_lineno - node.lineno + 1, 50)
+        for module in (overlay_win32, overlay_guidance):
+            source = Path(module.__file__).read_text(encoding="utf-8")
+            for node in ast.walk(ast.parse(source)):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    with self.subTest(module=module.__name__, function=node.name):
+                        self.assertLessEqual(node.end_lineno - node.lineno + 1, 50)
 
     def test_circle_copy_and_composition_failures_release_selected_objects(
         self,
@@ -96,8 +97,9 @@ class OverlayStructureTest(unittest.TestCase):
             create=True,
             side_effect=[user, gdi, object()],
         ):
-            with patch.object(overlay_win32, "_configure_api"):
+            with patch.object(overlay_win32, "_configure_api"), patch.object(overlay_win32, "RecordingGuidance") as guidance:
                 overlay._run()
+        guidance.return_value.close.assert_called_once()
         self.assertEqual(["overlay-error"], commands)
         self.assertIsInstance(overlay._error, RecorderError)
         user.DestroyWindow.assert_called_once_with(11)
