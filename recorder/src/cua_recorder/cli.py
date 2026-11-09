@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--output-root", required=True, type=Path, help="录制一级目录的输出根")
     record.add_argument("--framerate", type=int, default=30, choices=range(1, 61), metavar="1..60")
     record.add_argument("--exclude-injected", action="store_true", help="过滤被 Windows 标记为 injected 的事件")
-    record.add_argument("--no-overlay", action="store_true", help="不显示桌面悬浮条，仅通过快捷键和 stdin 控制")
+    record.add_argument("--no-overlay", action="store_true", help="不显示屏幕边框、准备提示及悬浮条，仅通过快捷键和 stdin 控制")
     return parser
 
 
