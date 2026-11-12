@@ -1,0 +1,80 @@
+execution/package-lock.json
+  s_f7c05567cb70fa::t_240ec32f4b4758 17,21,2429,2787-2788,2831,3013,3035,3543-3544,3853-3855,4862,5305
+execution/cua/python-worker.ts
+  h_da32729ff218bd 95-122,149
+execution/cua/recording/create-task.ts
+  h_da32729ff218bd 88
+execution/package.json
+  h_da32729ff218bd 41,57-58,67
+execution/review/server/recording-card-routes.ts
+  h_da32729ff218bd 29,33,74,82,84,105,114-117,129
+execution/review/server/routes.ts
+  h_da32729ff218bd 237,255-261,390,396-397
+execution/review/service/json-store.ts
+  h_da32729ff218bd 1-60
+execution/review/service/recording-cards.ts
+  h_da32729ff218bd 9,14-38,40,43-46,50,54,56,61-73,82-92,97-103,105-114,119-121,125-135,137,142,144-148,152,154-167,169,173,179-181,185-187,193-202
+execution/review/service/recording-workflow.ts
+  h_da32729ff218bd 12-16,19,35-47,51-52,81-83
+execution/review/service/windows-recorder.ts
+  h_da32729ff218bd 60,176,185-188,192
+execution/review/shared/types.ts
+  h_da32729ff218bd 226
+execution/review/web/src/App.vue
+  h_da32729ff218bd 94,517,528,530-535,939-940
+execution/review/web/src/api.ts
+  h_da32729ff218bd 111
+execution/review/web/src/assets/ucd/record-tip-blue.svg
+  h_da32729ff218bd 1-4
+execution/review/web/src/components/RecordingCardDialog.vue
+  h_da32729ff218bd 4,9,52,56,63,69,73,78,90,92
+execution/review/web/src/components/RecordingCatalog.vue
+  h_da32729ff218bd 8-9,33,37,39,42,46,51,54-95,97-115,117
+execution/review/web/src/components/RecordingConsole.vue
+  h_da32729ff218bd 7-8,29,179-182,213,222,225,239,241,248,272,295-296,298-299
+execution/review/web/src/components/RecordingWorkflowView.vue
+  h_da32729ff218bd 16,20-22,34,42-46,82-128,132-133,154,160,162,170-181,183-229,231-234,236-251
+execution/review/web/src/components/RecordingWorkspace.vue
+  h_da32729ff218bd 15,58,170,215-216,244,322-323,326-332,335,337-338,341-342,344
+execution/review/web/src/console.css
+  h_da32729ff218bd 120-123,126,132-137,140,147-170,414
+execution/review/web/src/i18n.ts
+  h_da32729ff218bd 348-440,786-878
+execution/review/web/src/workflow.css
+  h_da32729ff218bd 2-7,11,17-73,166,171,243-244,247-257,285-314,327-331,333,492,568-569,589
+record/src/cua_record/__main__.py
+  h_da32729ff218bd 1-9,12-17
+record/src/cua_record/log_processor.py
+  h_da32729ff218bd 608,611,617,620,632,638
+record/src/cua_record/trace_generator.py
+  h_da32729ff218bd 457-472,492,505,569
+recorder/src/cua_recorder/cli.py
+  h_da32729ff218bd 28,83
+recorder/src/cua_recorder/overlay_guidance.py
+  h_da32729ff218bd 15-16,28,34,43,158,162
+recorder/src/cua_recorder/overlay_win32.py
+  h_da32729ff218bd 242,245,317
+recorder/src/cua_recorder/session.py
+  h_da32729ff218bd 57,61,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5+huawei.3",
+  "base_commit_sha": "69bd5521a25f28ca8c7bb106de3b8b96ac1785fa",
+  "prompts": {},
+  "humans": {
+    "h_da32729ff218bd": {
+      "author": "c30046905 <chenchao256@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_f7c05567cb70fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ee5c9cd-9dfc-4149-9c79-ca2c642d244f",
+        "model": "qwen"
+      },
+      "human_author": "c30046905 <chenchao256@huawei.com>"
+    }
+  }
+}
