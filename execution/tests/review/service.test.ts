@@ -9,7 +9,7 @@ import { readTaskManifest, writeJsonFile } from '../../cua/contracts/validation.
 import { readYamlDocument, writeYamlDocument } from '../../cua/task/yaml-task.js';
 import { buildStepContent, defaultStepEditor, parseStepEditor } from '../../review/shared/step-editor.js';
 import { loadReviewTask } from '../../review/service/review-task.js';
-import { applyReviewMutation } from '../../review/service/task-mutations.js';
+import { applyReviewMutation } from '../../review/shared/task-mutations.js';
 import {
   ReviewConflictError,
   ReviewReadonlyError,

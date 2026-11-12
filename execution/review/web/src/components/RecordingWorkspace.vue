@@ -335,7 +335,7 @@ onUnmounted(() => {
       <h2 class="workflow-asset-label">事件日志</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? '事件日志缺失' }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="查看日志" title="查看日志" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
       </div>
       <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
-      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">重新录制</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">任务分析</button></div>
+      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">重新录制</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">技能生成</button></div>
     </template>
   </template>
   <template v-else>

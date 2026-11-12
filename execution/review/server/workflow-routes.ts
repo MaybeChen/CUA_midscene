@@ -4,7 +4,7 @@ import type { RecordingWorkflow } from '../service/recording-workflow.js';
 import { listSkills, readSkill, validateSkillDraft } from '../../cua/skills/assets.js';
 import { safeSkillFile } from '../../cua/skills/paths.js';
 import { loadReviewSkill, saveReviewSkill } from '../service/review-skill.js';
-import { applyReviewMutation } from '../service/task-mutations.js';
+import { applyReviewMutation } from '../shared/task-mutations.js';
 import { uploadSkillReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes } from '../shared/reference-upload.js';
 import type { GenerationLanguage, ReviewMutation, ReviewTaskDraft, SaveReviewTaskRequest } from '../shared/types.js';

@@ -12,12 +12,12 @@ import { ApiError } from '../../review/web/src/api.js';
 import { ReviewDraftStorage } from '../../review/web/src/draft-storage.js';
 import { translate, type MessageKey, type TranslationParams } from '../../review/web/src/i18n.js';
 import type { ReviewMutation, ReviewSkillView } from '../../review/shared/types.js';
-import { applyReviewMutation } from '../../review/service/task-mutations.js';
+import { applyReviewMutation } from '../../review/shared/task-mutations.js';
 
 const appFile = new URL('../../review/web/src/App.vue', import.meta.url);
 let compiledApp: string;
 
-async function setupApp() {
+async function setupApp(props: { installedSkillName?: string } = {}) {
   if (!compiledApp) {
     const { descriptor } = parse(await readFile(appFile, 'utf8'));
     const script = compileScript(descriptor, { id: 'app-safety' });
@@ -36,7 +36,7 @@ async function setupApp() {
   };
   const require = createRequire(appFile);
   const load = (id: string) => {
-    if (id === 'vue') return { ...vue, onMounted() {} };
+    if (id === 'vue') return { ...vue, onMounted() {}, onUnmounted() {} };
     if (id === './api') return { ApiError, api };
     if (id.endsWith('/step-editor')) return stepEditor;
     if (id === './draft-storage') return { ReviewDraftStorage };
@@ -51,7 +51,7 @@ async function setupApp() {
   const exports: { default?: { setup: (props: object, context: object) => any } } = {};
   new Function('require', 'exports', 'window', compiledApp)(load, exports, { location: { search: '', href: 'http://127.0.0.1:47831/' }, history: { replaceState() {} } });
   const scope = vue.effectScope();
-  const app = scope.run(() => exports.default!.setup({}, { expose() {} }))!;
+  const app = scope.run(() => exports.default!.setup(props, { expose() {}, emit() {} }))!;
   const manifest = {
     schemaVersion: '0.3', skillName: 'task', title: '任务', description: '', goal: '',
     source: { tracePath: 'source/trace.json', processedLogPath: 'source/processed.json', conversionCommand: '' }, inputs: {},
@@ -70,6 +70,23 @@ async function setupApp() {
   app.populateEditor();
   return { app, mutations, uploadCalls: () => uploadCalls, succeed: () => { failMutation = false; }, stop: () => scope.stop() };
 }
+
+test('结果页步骤修改和选图只在内存中进行，不调用变更或上传接口', async () => {
+  const setup = await setupApp({ installedSkillName: 'task' });
+  try {
+    setup.app.editor.target = '内存中的新按钮';
+    assert.equal(setup.app.dirty.value, true);
+    assert.equal(setup.app.draftStorageState.value, 'idle');
+    await setup.app.insertStep();
+    assert.equal(setup.app.steps.value.length, 3);
+    assert.deepEqual(setup.mutations, []);
+    const file = Object.assign(new Blob(['image'], { type: 'image/png' }), { name: 'memory.png' });
+    await setup.app.uploadReference({ target: { files: [file], value: '' } } as unknown as Event);
+    assert.equal(setup.uploadCalls(), 0);
+    assert.match(setup.app.editor.referenceImages[0].url, /^blob:/);
+    setup.app.memoryReferences.clear();
+  } finally { setup.stop(); }
+});
 
 function snapshot(app: any) {
   return structuredClone(JSON.parse(JSON.stringify({ draft: app.draft.value, steps: app.steps.value, selected: app.selected.value, changes: app.changes.value })));

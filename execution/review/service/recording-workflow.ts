@@ -115,7 +115,7 @@ export class RecordingWorkflow {
           signal: controller.signal,
         });
         controller.signal.throwIfAborted();
-        status.phase = 'editing';
+        await this.synchronize(status);
       },
       controller.signal,
     );
@@ -140,16 +140,22 @@ export class RecordingWorkflow {
     const controller = new AbortController();
     const completion = this.run(
       status,
-      async () => {
-        await withSkillWriteLock(status.draftRoot, status.skillName, () => (this.dependencies.publish ?? publishRecordingDraft)({
-          ...status, skillsRoot: this.options.skillsRoot!, executionRoot: this.options.executionRoot,
-        }));
-        status.phase = 'done';
-      },
+      () => this.synchronize(status),
       controller.signal,
     );
     this.active = { id, controller, completion };
     return this.status(id);
+  }
+  private async synchronize(status: WorkflowStatus): Promise<void> {
+    status.phase = 'publishing';
+    status.log += '\n录制分析完成，正在打包并同步到 GDE Skill，请等待导入确认。\n';
+    this.write(status);
+    await withSkillWriteLock(status.draftRoot, status.skillName, () => (this.dependencies.publish ?? publishRecordingDraft)({
+      ...status, skillsRoot: this.options.skillsRoot!, executionRoot: this.options.executionRoot,
+    }));
+    await loadPublishedSkillResult(this.options.skillsRoot!, status.skillName);
+    status.log += `技能 ${status.skillName} 已同步到 GDE，正式 Skill 资源校验完成。\n`;
+    status.phase = 'done';
   }
   private async run(status: WorkflowStatus, work: () => Promise<void>, signal: AbortSignal): Promise<void> {
     try {

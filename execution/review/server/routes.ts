@@ -22,7 +22,7 @@ import type {
   SaveReviewTaskRequest,
   StartTaskExecutionRequest,
 } from '../shared/types.js';
-import { applyReviewMutation } from '../service/task-mutations.js';
+import { applyReviewMutation } from '../shared/task-mutations.js';
 import { uploadReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes, referenceImageMimeTypes } from '../shared/reference-upload.js';
 import { openExecutionReportFile, resolveExecutionReport } from '../service/execution-report.js';

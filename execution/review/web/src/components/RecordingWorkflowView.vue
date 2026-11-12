@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { recordingProgress } from '../recording-progress';
+import { skillGenerationProgress } from '../recording-progress';
 import folderIcon from '../assets/ucd/record-floder.svg';
 import copyIcon from '../assets/ucd/record-copy.svg';
 import importantIcon from '../assets/ucd/record-important.svg';
@@ -19,6 +19,21 @@ const error = ref('');
 const actionBusy = ref(false);
 const recording = ref(false);
 const result = ref<WorkflowResult>();
+const resultTab = ref<'overview' | 'steps'>('overview');
+const stepsVisited = ref(false);
+function selectResultTab(tab: 'overview' | 'steps'): void {
+  resultTab.value = tab;
+  if (tab === 'steps') stepsVisited.value = true;
+}
+function moveResultTab(tab: 'overview' | 'steps'): void {
+  selectResultTab(tab);
+  document.getElementById(`skill-${tab}-tab`)?.focus();
+}
+async function savedSteps(): Promise<void> {
+  showToast('任务步骤已保存并同步到 Skill');
+  try { result.value = await request(`${root}/result`); }
+  catch (cause) { showToast(cause instanceof Error ? cause.message : String(cause), true); }
+}
 const toast = ref<{ message: string; error: boolean }>();
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function showToast(message: string, error = false): void {
@@ -37,9 +52,9 @@ const renderedContent = computed(() =>
   DOMPurify.sanitize(marked.parse((result.value?.content ?? '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ''), { async: false }) as string),
 );
 const phase = computed(() => (recording.value ? 'idle' : (status.value?.phase ?? 'idle')));
-const activeStep = computed(() => (['idle'].includes(phase.value) ? 1 : phase.value === 'done' ? 3 : 2));
+const activeStep = computed(() => phase.value === 'idle' ? 1 : 2);
 const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
-const progress = computed(() => recordingProgress(status.value?.log ?? ''));
+const progress = computed(() => skillGenerationProgress(status.value?.log ?? '', phase.value));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
@@ -48,7 +63,9 @@ async function refresh(): Promise<void> {
     const next = await request<WorkflowStatus>(`${root}/workflow`);
     if (disposed) return;
     status.value = next;
-    if (next.phase === 'done' && !result.value) result.value = await request(`${root}/result`);
+    if (next.phase === 'editing') status.value = await request<WorkflowStatus>(`${root}/publish`, { method: 'POST' });
+    if (status.value?.phase === 'done' && !result.value) result.value = await request(`${root}/result`);
+    error.value = '';
   } catch (cause) {
     error.value = String(cause instanceof Error ? cause.message : cause);
   } finally {
@@ -65,6 +82,8 @@ async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
       ...(name === 'analyze' ? { body: JSON.stringify({ language: locale.value }) } : {}),
     });
     result.value = undefined;
+    resultTab.value = 'overview';
+    stepsVisited.value = false;
     await refresh();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
@@ -104,7 +123,7 @@ onUnmounted(() => {
     <Teleport to="body"><Transition name="workflow-toast"><div v-if="toast" class="workflow-toast" :class="{ error: toast.error }" role="status" aria-live="polite">{{ toast.message }}</div></Transition></Teleport>
     <nav class="workflow-stepper" aria-label="创建技能阶段">
       <span
-        v-for="(label, index) in ['流程录制', '技能编辑', '技能生成']"
+        v-for="(label, index) in ['流程录制', '技能生成']"
         :key="label"
         :class="{ current: activeStep === index + 1, complete: activeStep > index + 1 }"
         :aria-current="activeStep === index + 1 ? 'step' : undefined"
@@ -123,7 +142,7 @@ onUnmounted(() => {
       @analyze="action('analyze')"
       @folder-error="showToast($event, true)"
     />
-    <template v-else-if="running || phase === 'failed' || phase === 'stopped'">
+    <template v-else-if="running || phase === 'failed' || phase === 'stopped' || phase === 'editing'">
       <section class="workflow-progress-panel">
         <h2>任务进度</h2>
         <div
@@ -131,7 +150,7 @@ onUnmounted(() => {
           :class="{ failed: phase === 'failed', stopped: phase === 'stopped' }"
           :role="running ? 'status' : 'alert'"
         >
-          <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress || phase !== 'analyzing' }" role="progressbar" aria-label="任务生成进度" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="phase === 'analyzing' ? progress?.completed : undefined"><span :style="progress && phase === 'analyzing' ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
+          <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress }" role="progressbar" aria-label="任务生成进度" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="progress?.completed"><span :style="progress ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
           <h3>
             {{
               phase === 'analyzing'
@@ -140,14 +159,14 @@ onUnmounted(() => {
                   ? '正在打包并导入技能'
                   : phase === 'stopped'
                     ? '任务已停止'
-                    : '任务失败'
+                    : phase === 'editing' ? '等待同步技能' : '任务失败'
             }}
           </h3>
           <p v-if="running">
             {{
               phase === 'analyzing'
                 ? '正在处理录制并创建可运行任务，请勿关闭页面。'
-                : '正在通过宿主导入编辑后的技能，请等待导入确认。'
+                : '正在打包技能并同步到 GDE，请等待导入确认。'
             }}
           </p>
           <p v-if="status?.error">{{ status.error }}</p>
@@ -157,7 +176,6 @@ onUnmounted(() => {
       <div class="workflow-footer">
         <template v-if="!running"
           ><button class="secondary" @click="recording = true">返回录制</button
-          ><button v-if="status?.skillName" class="secondary" @click="status.phase = 'editing'">返回编辑</button
           ><button class="primary" :disabled="actionBusy" @click="action(status?.skillName ? 'publish' : 'analyze')">
             再次尝试
           </button></template
@@ -166,8 +184,12 @@ onUnmounted(() => {
         </button>
       </div>
     </template>
-    <App v-else-if="phase === 'editing'" :draft-card-id="card.id" :draft-task-title="card.name" @publish="action('publish')" />
     <template v-else-if="phase === 'done' && result">
+      <div class="workflow-result-tabs" role="tablist" aria-label="技能生成结果">
+        <button id="skill-overview-tab" role="tab" :aria-selected="resultTab === 'overview'" aria-controls="skill-overview-panel" :tabindex="resultTab === 'overview' ? 0 : -1" @click="selectResultTab('overview')" @keydown.right.prevent="moveResultTab('steps')">Skill概览</button>
+        <button id="skill-steps-tab" role="tab" :aria-selected="resultTab === 'steps'" aria-controls="skill-steps-panel" :tabindex="resultTab === 'steps' ? 0 : -1" @click="selectResultTab('steps')" @keydown.left.prevent="moveResultTab('overview')">任务步骤</button>
+      </div>
+      <div v-show="resultTab === 'overview'" id="skill-overview-panel" role="tabpanel" aria-labelledby="skill-overview-tab">
       <div class="workflow-result-copy">
         <span>复制到对话即可运行</span>
         <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" aria-label="复制运行指令" title="复制运行指令" @click="copy()"><img :src="copyIcon" alt="" /></button></div>
@@ -186,6 +208,14 @@ onUnmounted(() => {
       </article>
       <h2 class="workflow-content-label"><img :src="importantIcon" alt="必填" />内容</h2>
       <article class="workflow-skill-content" v-html="renderedContent"></article>
+      </div>
+      <div v-show="resultTab === 'steps'" id="skill-steps-panel" role="tabpanel" aria-labelledby="skill-steps-tab">
+        <App v-if="stepsVisited" :key="result.name" :installed-skill-name="result.name" :draft-task-title="card.name" @saved="savedSteps" />
+      </div>
     </template>
+    <div v-else-if="phase === 'done'" class="catalog-feedback">
+      <button v-if="error" class="secondary" @click="refresh">重新加载技能结果</button>
+      <span v-else>正在读取技能结果…</span>
+    </div>
   </section>
 </template>
