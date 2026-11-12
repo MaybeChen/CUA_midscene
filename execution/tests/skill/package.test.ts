@@ -74,9 +74,10 @@ test('Skill 发布物只声明 TypeScript 运行时和必要资产', async () =>
 
   const npmArgs = ['pack', '--dry-run', '--json', '--ignore-scripts'];
   const npmExecPath = process.env.npm_execpath;
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const { stdout } = npmExecPath
     ? await execFileAsync(process.execPath, [npmExecPath, ...npmArgs], { cwd: executionRoot })
-    : await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', npmArgs, {
+    : await execFileAsync(npmCommand, npmArgs, {
         cwd: executionRoot,
       });
   const pack = JSON.parse(stdout) as Array<{ files?: Array<{ path?: string }> }>;

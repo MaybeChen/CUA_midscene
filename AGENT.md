@@ -24,3 +24,4 @@
 14. `execution/SKILL.md` 是 CLI 维护说明；正式任务的 SKILL.md 是供 GDEClaw 选择与委派的 Skill 描述，Runtime 读取其身份并校验 CUA 标记。Python Agent 不自行扫描或加载这些 Markdown。Workbench 只由宿主设置入口调用 Runtime workbench，浏览器和 worker 生命周期归宿主所有。不臆造 GDEClaw 注册、更新、启用或分发 API。
 15. 代码、注释、文档、Skill 和 UI 文案只描述稳定设计、能力边界和必要用法。变更历史只在用户明确要求时记录；其他场景不写入对话过程、用户纠正过程、版本演进或前后方案比较，修改时同步清理同类元叙述。
 16. 源码仓的环境变量契约只保存在根 `.env.example`，本地真实值只保存在被忽略的根 `.env.local`。TypeScript Runtime 按“进程环境、根 `.env.local`、根 `.env`”读取；Python 包由调用方注入进程环境。组件和独立 execution 发布包不得携带环境文件。
+17. 禁止嵌套三元表达式，包括 TypeScript、Vue 模板及 Python 条件表达式；多分支判断使用 if/else、switch 或职责明确的具名函数。

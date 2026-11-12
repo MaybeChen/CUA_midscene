@@ -56,6 +56,13 @@ const activeStep = computed(() => phase.value === 'idle' ? 1 : 2);
 const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
 const progress = computed(() => skillGenerationProgress(status.value?.log ?? '', phase.value));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
+const progressHeading = computed(() => {
+  if (phase.value === 'analyzing') return '正在生成任务';
+  if (phase.value === 'publishing') return '正在打包并导入技能';
+  if (phase.value === 'stopped') return '任务已停止';
+  if (phase.value === 'editing') return '等待同步技能';
+  return '任务失败';
+});
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
   fetching = true;
@@ -151,17 +158,7 @@ onUnmounted(() => {
           :role="running ? 'status' : 'alert'"
         >
           <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress }" role="progressbar" aria-label="任务生成进度" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="progress?.completed"><span :style="progress ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
-          <h3>
-            {{
-              phase === 'analyzing'
-                ? '正在生成任务'
-                : phase === 'publishing'
-                  ? '正在打包并导入技能'
-                  : phase === 'stopped'
-                    ? '任务已停止'
-                    : phase === 'editing' ? '等待同步技能' : '任务失败'
-            }}
-          </h3>
+          <h3>{{ progressHeading }}</h3>
           <p v-if="running">
             {{
               phase === 'analyzing'
