@@ -26,10 +26,11 @@ export function registerRecordingCardRoutes(
   recorder: RecorderControl,
   recordings: () => Promise<RecordingCatalog>,
   busy: () => boolean = () => false,
+  deleteRecording: (recordingId: string) => Promise<void> = async () => {},
 ): void {
   registerCardQueries(app, store, recordings);
   registerCardWrites(app, store);
-  registerCardVisitsAndDeletion(app, store, recorder, busy);
+  registerCardVisitsAndDeletion(app, store, recorder, busy, deleteRecording);
   registerCardRecording(app, store, recorder, busy);
 }
 
@@ -70,6 +71,7 @@ function registerCardVisitsAndDeletion(
   store: RecordingCardStore,
   recorder: RecorderControl,
   busy: () => boolean,
+  deleteRecording: (recordingId: string) => Promise<void>,
 ): void {
   app.delete<{ Params: { id: string } }>(
     '/api/recording-cards/:id',
@@ -77,7 +79,9 @@ function registerCardVisitsAndDeletion(
     async (request) => {
       if (recorder.status().phase === 'failed') store.clearSession();
       if (busy()) throw new Error('任务正在处理，不能删除卡片');
+      const card = store.get(request.params.id);
       store.remove(request.params.id);
+      if (card.recordingId) await deleteRecording(card.recordingId);
       return { deleted: true };
     },
   );
@@ -98,7 +102,7 @@ function registerCardRecording(
   busy: () => boolean,
 ): void {
   let starting = false;
-  app.post<{ Params: { id: string }; Body: { displayId: string } }>(
+  app.post<{ Params: { id: string }; Body: { displayId: string; language?: string } }>(
     '/api/recording-cards/:id/record',
     {
       schema: {
@@ -107,7 +111,10 @@ function registerCardRecording(
           type: 'object',
           required: ['displayId'],
           additionalProperties: false,
-          properties: { displayId: { type: 'string', minLength: 1 } },
+          properties: {
+            displayId: { type: 'string', minLength: 1 },
+            language: { type: 'string', enum: ['zh-CN', 'en-US'] },
+          },
         },
       },
     },
@@ -119,7 +126,7 @@ function registerCardRecording(
       store.beginRecording(request.params.id);
       starting = true;
       try {
-        return await recorder.start(request.body.displayId);
+        return await recorder.start(request.body.displayId, request.body.language);
       } catch (error) {
         store.clearSession();
         throw error;

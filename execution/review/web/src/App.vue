@@ -91,6 +91,7 @@ const advancedInputText = ref('{}');
 const changes = ref<ReviewChange[]>([]);
 const status = ref(() => t('review.loading'));
 const busy = ref(false);
+const publishing = ref(false);
 const conflict = ref(false);
 const taskDeleteOpen = ref(false);
 const draftDiscardOpen = ref(false);
@@ -513,7 +514,7 @@ async function save(): Promise<boolean> {
       : item);
     selected.value = Math.min(selectedIndex, steps.value.length - 1);
     populateEditor();
-    status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
+    if (!props.draftCardId) status.value = () => t('review.saved', { files: result.changed.join(', ') || t('review.noChanges') });
     return true;
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409;
@@ -524,8 +525,14 @@ async function save(): Promise<boolean> {
 }
 
 async function publishDraft(): Promise<void> {
+  if (publishing.value) return;
   syncSemanticDraft();
-  if (await save()) emit('publish');
+  publishing.value = true;
+  try {
+    if (await save()) emit('publish');
+  } finally {
+    publishing.value = false;
+  }
 }
 
 async function runCurrentTask(): Promise<void> {
@@ -929,7 +936,7 @@ onMounted(async () => {
       @cancel="taskDeleteOpen = false"
     />
 
-    <div v-if="draftCardId" class="workflow-footer"><button class="primary" :disabled="busy || conflict || advancedEditing" @click="publishDraft">保存并生成Skill</button></div>
-    <footer v-if="mode === 'review' && skills.length && (!draftCardId || status() !== t('review.ready'))"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
+    <div v-if="draftCardId" class="workflow-footer"><button class="primary" :disabled="busy || conflict || advancedEditing || publishing" @click="publishDraft">{{ t('review.saveAndGenerate') }}</button></div>
+    <footer v-if="!draftCardId && mode === 'review' && skills.length && status() !== t('review.ready')"><span :class="{ error: conflict }">{{ status() }}</span><code v-if="devMode">{{ view?.revision }}</code></footer>
   </div>
 </template>

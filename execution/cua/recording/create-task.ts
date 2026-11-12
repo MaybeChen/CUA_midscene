@@ -85,6 +85,7 @@ export async function runRecordingParser(
     pythonExecutable: request.pythonExecutable,
     module: 'cua_record',
     args: ['process', request.recordingPath, ...(request.language ? ['--language', request.language] : [])],
+    env: { CUA_LANGUAGE: request.language ?? 'zh-CN' },
     progress: request.progress,
     signal: request.signal,
   }, spawnProcess);

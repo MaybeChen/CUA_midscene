@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--framerate", type=int, default=30, choices=range(1, 61), metavar="1..60")
     record.add_argument("--exclude-injected", action="store_true", help="过滤被 Windows 标记为 injected 的事件")
     record.add_argument("--no-overlay", action="store_true", help="不显示屏幕边框、准备提示及悬浮条，仅通过快捷键和 stdin 控制")
+    record.add_argument("--language", default="zh-CN", choices=["zh-CN", "en-US"], help="界面语言（覆盖层提示文案）")
     return parser
 
 
@@ -79,6 +80,7 @@ def _record(args: argparse.Namespace) -> int:
         framerate=args.framerate,
         include_injected=not args.exclude_injected,
         overlay_factory=None if args.no_overlay else RecorderOverlay,
+        language=args.language,
     )
     try:
         session.run(sys.stdin, write_event)

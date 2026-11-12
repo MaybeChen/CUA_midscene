@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import importantIcon from '../assets/ucd/record-important.svg';
 import { nextTick, ref, watch } from 'vue';
+import { useI18n } from '../i18n';
 import type {
   RecordingCard,
   RecordingCardInput,
 } from '../../../shared/recording-cards';
+const { t } = useI18n();
 const props = defineProps<{
   open: boolean;
   card?: RecordingCard;
@@ -47,33 +49,33 @@ function submit(): void {
   >
     <form @submit.prevent="submit">
       <header>
-        <h2 id="card-dialog-title">{{ card ? '编辑流程' : '创建任务' }}</h2>
+        <h2 id="card-dialog-title">{{ card ? t('card.editCard') : t('card.create') }}</h2>
         <button
           type="button"
           :disabled="busy"
-          aria-label="关闭"
+          :aria-label="t('card.cancel')"
           @click="emit('close')"
         >
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" fill="none" stroke="currentColor" stroke-width="1" /></svg>
         </button>
       </header>
       <label
-        ><span><img class="card-dialog-required" :src="importantIcon" alt="" />任务名称</span
+        ><span><img class="card-dialog-required" :src="importantIcon" alt="" />{{ t('card.taskName') }}</span
         ><input
           ref="nameInput"
           v-model="name"
           required
           maxlength="120"
-          placeholder="请输入知识库标题"
+          :placeholder="t('card.taskNamePlaceholder')"
           :disabled="busy"
       /></label>
       <label
-        ><span>任务描述</span
+        ><span>{{ t('card.taskDesc') }}</span
         ><textarea
           v-model="description"
           maxlength="2000"
           rows="3"
-          placeholder="请输入描述"
+          :placeholder="t('card.taskDescPlaceholder')"
           :disabled="busy"
         ></textarea>
       </label>
@@ -85,9 +87,9 @@ function submit(): void {
           :disabled="busy"
           @click="emit('close')"
         >
-          取消</button
+          {{ t('card.cancel') }}</button
         ><button class="primary" :disabled="busy || !name.trim()">
-          {{ busy ? '保存中…' : '确认' }}
+          {{ busy ? t('card.saving') : t('card.confirm') }}
         </button>
       </footer>
     </form>

@@ -12,7 +12,7 @@ import { api } from '../api';
 import { useI18n } from '../i18n';
 import { shouldDetectDisplays } from '../recording-display';
 import ConfirmDialog from './ConfirmDialog.vue';
-import warningIcon from '../assets/ucd/record-warning.svg';
+import tipIcon from '../assets/ucd/record-tip-blue.svg';
 import playIcon from '../assets/ucd/record-play.svg';
 import folderIcon from '../assets/ucd/record-floder.svg';
 import reportIcon from '../assets/ucd/record-report.svg';
@@ -55,7 +55,7 @@ async function previewAsset(kind: 'video' | 'log'): Promise<void> {
       const response = await fetch(`/api/recordings/${encodeURIComponent(selected.value.id)}/assets/log`);
       const value = await response.json();
       if (!response.ok) throw new Error(value.error);
-      logPreview.value = value.text + (value.truncated ? '\n…日志较长，仅预览前2MB' : '');
+      logPreview.value = value.text + (value.truncated ? '\n' + t('workflow.logTruncated') : '');
     }
     preview.value = kind;
   } catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause); }
@@ -167,7 +167,7 @@ async function loadRecordings(): Promise<void> {
     const linkedId = selectedId.value;
     applyCatalog(next);
     if (props.cardId && linkedId && !next.recordings.some(item => item.id === linkedId)) {
-      error.value = `关联的录制 ${linkedId} 不存在，请检查录制目录或重新录制。`;
+      error.value = t('workflow.relatedMissing', { id: linkedId });
     }
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught);
@@ -212,8 +212,8 @@ async function startRecorder(): Promise<void> {
   };
   try {
     recorderStatus.value = props.cardId
-      ? await api.startCardRecorder(props.cardId, { displayId: selectedDisplayId.value })
-      : await api.startRecorder({ displayId: selectedDisplayId.value });
+      ? await api.startCardRecorder(props.cardId, { displayId: selectedDisplayId.value, language: locale.value })
+      : await api.startRecorder({ displayId: selectedDisplayId.value, language: locale.value });
     clock.value = Date.now();
   } catch (caught) {
     recorderError.value = caught instanceof Error ? caught.message : String(caught);
@@ -241,7 +241,7 @@ async function stopRecorder(): Promise<void> {
 async function openFolder(): Promise<void> {
   if (opening.value) return;
   if (!selected.value) {
-    reportFolderError('未找到当前录制，请刷新后重试');
+    reportFolderError(t('workflow.openFolderNotFound'));
     return;
   }
   opening.value = true;
@@ -319,25 +319,29 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <template v-if="cardId">
-    <Teleport to="body"><dialog ref="previewDialog" class="asset-preview" :aria-label="preview === 'video' ? '录制视频' : '事件日志'" @cancel.prevent="preview = undefined"><button autofocus class="secondary" @click="preview = undefined">关闭预览</button><video v-if="preview === 'video' && selected" controls autoplay :src="`/api/recordings/${encodeURIComponent(selected.id)}/assets/video`"></video><pre v-else>{{ logPreview }}</pre></dialog></Teleport>
+  <div v-if="cardId" class="rw-root">
+    <Teleport to="body"><dialog ref="previewDialog" class="asset-preview" :aria-label="preview === 'video' ? t('workflow.recordedVideo') : t('workflow.eventLog')" @cancel.prevent="preview = undefined"><button autofocus class="secondary" @click="preview = undefined">{{ t('workflow.closePreview') }}</button><video v-if="preview === 'video' && selected" controls autoplay :src="`/api/recordings/${encodeURIComponent(selected.id)}/assets/video`"></video><pre v-else>{{ logPreview }}</pre></dialog></Teleport>
     <div v-if="recorderError || error" class="console-error" role="alert">{{ recorderError || error }}</div>
     <template v-if="recorderCollapsed || rerecord || !selected">
-      <p class="workflow-warning"><img :src="warningIcon" alt="" />请将需要录制的窗口放在绿框范围内，并确保后续操作窗口不超出绿框范围。</p>
-      <div v-if="recorderCollapsed" class="workflow-live" role="status"><strong>{{ recorderStatus.phase === 'armed' ? '已准备录制' : '录制进行中' }}</strong><p>使用 {{ recorderStatus.hotkey || 'Ctrl+Shift+F9' }} 开始或结束录制。{{ elapsedRecording }}</p></div>
-      <div class="workflow-screens"><button v-for="display in recorderDisplays" :key="display.id" :disabled="recorderCollapsed || recorderBusy" :class="{ selected: selectedDisplayId === display.id }" @click="selectedDisplayId = display.id"><span>显示器{{ display.index + 1 }} <em v-if="display.primary">主屏幕</em><small>{{ display.width }}×{{ display.height }} / {{ display.deviceName }}</small></span><img :src="display.previewUrl" :alt="`显示器${display.index + 1}预览`" /></button></div>
-      <p v-if="!recorderDisplays.length" class="catalog-feedback">{{ recorderBusy ? '正在检测屏幕…' : '未检测到可录制屏幕，请检测屏幕并检查录制环境。' }}</p>
-      <div class="workflow-footer"><button v-if="rerecord && !recorderCollapsed" class="secondary" @click="rerecord = false">返回录制结果</button><button v-if="!recorderCollapsed" class="secondary" :disabled="recorderBusy" @click="refreshRecorderDisplays">检测屏幕</button><button v-if="!recorderCollapsed" class="primary" :disabled="!canStartRecorder" @click="startRecorder">准备录制</button><button v-else class="secondary" :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'" @click="stopRecorder">{{ recorderStatus.phase === 'armed' ? '取消准备' : '结束录制' }}</button></div>
+      <div class="rw-scroll">
+      <p class="workflow-warning"><img :src="tipIcon" alt="" />{{ t('workflow.greenBoxTip') }}</p>
+      <div v-if="recorderCollapsed" class="workflow-live" role="status"><strong>{{ recorderStatus.phase === 'armed' ? t('workflow.armed') : t('workflow.recording') }}</strong><p>{{ t('workflow.useHotkey', { hotkey: recorderStatus.hotkey || 'Ctrl+Shift+F9' }) }} {{ elapsedRecording }}</p></div>
+      <div class="workflow-screens"><button v-for="display in recorderDisplays" :key="display.id" :disabled="recorderCollapsed || recorderBusy" :class="{ selected: selectedDisplayId === display.id }" @click="selectedDisplayId = display.id"><span>{{ t('workflow.display', { index: display.index + 1 }) }} <em v-if="display.primary">{{ t('workflow.primary') }}</em><small>{{ display.width }}×{{ display.height }} / {{ display.deviceName }}</small></span><img :src="display.previewUrl" :alt="t('workflow.display', { index: display.index + 1 })" /></button></div>
+      <p v-if="!recorderDisplays.length" class="catalog-feedback">{{ recorderBusy ? t('workflow.detecting') : t('workflow.noScreens') }}</p>
+      </div>
+      <div class="workflow-footer"><button v-if="rerecord && !recorderCollapsed" class="secondary" @click="rerecord = false">{{ t('workflow.backToResult') }}</button><button v-if="!recorderCollapsed" class="secondary" :disabled="recorderBusy" @click="refreshRecorderDisplays">{{ t('workflow.detectScreens') }}</button><button v-if="!recorderCollapsed" class="primary" :disabled="!canStartRecorder" @click="startRecorder">{{ t('workflow.prepareRecord') }}</button><button v-else class="secondary" :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'" @click="stopRecorder">{{ recorderStatus.phase === 'armed' ? t('workflow.cancelPrepare') : t('workflow.endRecord') }}</button></div>
     </template>
     <template v-else>
+      <div class="rw-scroll">
       <div class="workflow-recording-assets">
-      <h2 class="workflow-asset-label">视频文件</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? '视频文件缺失' }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="播放" title="播放" @click="previewAsset('video')"><img :src="playIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
-      <h2 class="workflow-asset-label">事件日志</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? '事件日志缺失' }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" aria-label="查看日志" title="查看日志" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" aria-label="打开文件夹" :title="opening ? '正在打开文件夹' : '打开文件夹'" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      <h2 class="workflow-asset-label">{{ t('workflow.recordedVideo') }}</h2><div class="workflow-asset"><img :src="videoIcon" alt="" /><span><strong>{{ selected.video?.name ?? t('workflow.videoMissing') }}</strong><small>{{ formatSize(selected.video?.size) }}　{{ selected.screen?.width }}×{{ selected.screen?.height }}</small></span><span class="asset-open"><button class="workflow-asset-action" :aria-label="t('workflow.play')" :title="t('workflow.play')" @click="previewAsset('video')"><img :src="playIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" :aria-label="t('workflow.openFolder')" :title="opening ? t('workflow.openingFolder') : t('workflow.openFolder')" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
+      <h2 class="workflow-asset-label">{{ t('workflow.eventLog') }}</h2><div class="workflow-asset"><img :src="logIcon" alt="" /><span><strong>{{ selected.eventLog?.name ?? t('workflow.logMissing') }}</strong><small>{{ formatSize(selected.eventLog?.size) }}</small></span><span class="asset-open"><button class="workflow-asset-action" :aria-label="t('workflow.viewLog')" :title="t('workflow.viewLog')" @click="previewAsset('log')"><img :src="reportIcon" alt="" /></button><button class="workflow-asset-action" :disabled="opening" :aria-busy="opening" :aria-label="t('workflow.openFolder')" :title="opening ? t('workflow.openingFolder') : t('workflow.openFolder')" @click="openFolder"><img :src="folderIcon" class="workflow-folder-icon" alt="" /></button></span></div>
       </div>
       <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
-      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">重新录制</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">任务分析</button></div>
+      </div>
+      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">{{ t('workflow.reRecord') }}</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">{{ t('workflow.analyze') }}</button></div>
     </template>
-  </template>
+  </div>
   <template v-else>
   <section class="panel recorder-control" :class="{ collapsed: recorderCollapsed }">
     <template v-if="recorderCollapsed">

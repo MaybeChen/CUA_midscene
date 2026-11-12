@@ -117,21 +117,56 @@
 }
 .console-content {
   min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .console-titlebar {
+  flex-shrink: 0;
   height: 36px;
   border-bottom: 0.5px solid #e9e9e9;
   background: #fcfcfd;
 }
 .recording-home {
-  padding: 30px 60px 40px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 30px 60px 10px;
+  overflow: hidden;
 }
 .catalog-heading {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 24px;
+}
+.home-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.home-scroll::-webkit-scrollbar {
+  width: 14px;
+  background: transparent;
+}
+.home-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.home-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.home-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+}
+.home-scroll::-webkit-scrollbar-button {
+  display: none;
 }
 .catalog-heading h1 {
   display: flex;
@@ -376,6 +411,7 @@
   overflow-wrap: anywhere;
 }
 .console-detail-heading {
+  flex-shrink: 0;
   padding: 30px 40px 0;
 }
 .console-detail-heading > div {

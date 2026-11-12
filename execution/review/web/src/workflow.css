@@ -1,14 +1,75 @@
 .recording-workflow {
-  display: flow-root;
-  padding: 0 40px 170px;
-  min-height: calc(100vh - 160px);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 40px;
+  overflow: hidden;
 }
 .workflow-stepper {
   display: flex;
+  flex-shrink: 0;
   width: 648px;
   max-width: 100%;
   margin: 12px 0 24px;
   gap: 4px;
+}
+.workflow-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 中间滚动区：WorkflowView 内 running/done 分支的内容包裹 */
+.workflow-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* idle/editing 分支：撑满剩余高度，让子组件内部自己分段 */
+.branch-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* RecordingWorkspace 根容器（idle 分支） */
+.rw-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* RecordingWorkspace 中间滚动区 */
+.rw-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 22px;
+}
+.workflow-content::-webkit-scrollbar,
+.rw-scroll::-webkit-scrollbar {
+  width: 14px;
+  background: transparent;
+}
+.workflow-content::-webkit-scrollbar-track,
+.rw-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.workflow-content::-webkit-scrollbar-thumb,
+.rw-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.workflow-content:hover::-webkit-scrollbar-thumb,
+.rw-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+}
+.workflow-content::-webkit-scrollbar-button,
+.rw-scroll::-webkit-scrollbar-button {
+  display: none;
 }
 .workflow-stepper span {
   flex: 1;
@@ -102,22 +163,15 @@
   background: #c6c6c6;
 }
 .workflow-footer {
-  position: fixed;
-  bottom: 20px;
-  right: 40px;
-  left: 320px;
-  z-index: 20;
+  flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
-  padding: 0;
+  padding: 20px 0;
   margin: 0;
-  pointer-events: none;
 }
 .workflow-footer button {
-  pointer-events: auto;
   height: 50px;
   min-height: 50px;
   min-width: 0;
@@ -186,11 +240,21 @@
   font-size: 14px;
   color: #868686;
 }
-.workflow-progress-panel {
-  min-height: 65vh;
-  padding: 20px;
+/* 进度面板外层滚动容器：边框/圆角放在这里 */
+.workflow-content.workflow-progress-wrap {
   border: 1px solid #e9e9e9;
   border-radius: 16px;
+  padding: 20px;
+}
+.workflow-progress-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.workflow-progress-panel > * {
+  width: 100%;
 }
 .workflow-progress-panel h2 {
   font-size: 16px;
@@ -212,13 +276,41 @@
 }
 
 .workflow-progress-message pre {
-  max-height: 330px;
-  overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 12px 0 0;
   font-size: 12px;
   line-height: 20px;
+}
+.workflow-progress-message pre::-webkit-scrollbar,
+.workflow-editor .editor::-webkit-scrollbar,
+.workflow-editor .step-list::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+}
+.workflow-progress-message pre::-webkit-scrollbar-track,
+.workflow-editor .editor::-webkit-scrollbar-track,
+.workflow-editor .step-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.workflow-progress-message pre::-webkit-scrollbar-thumb,
+.workflow-editor .editor::-webkit-scrollbar-thumb,
+.workflow-editor .step-list::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.workflow-progress-message pre:hover::-webkit-scrollbar-thumb,
+.workflow-editor .editor:hover::-webkit-scrollbar-thumb,
+.workflow-editor .step-list:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+}
+.workflow-progress-message pre::-webkit-scrollbar-button,
+.workflow-editor .editor::-webkit-scrollbar-button,
+.workflow-editor .step-list::-webkit-scrollbar-button {
+  display: none;
 }
 .workflow-progress-message.failed {
   border-color: #dc6b84;
@@ -232,7 +324,13 @@
   background: #f7f7f7;
 }
 .workflow-editor.shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding: 0;
+  overflow: hidden;
 }
 .workflow-editor .topbar {
   display: none;
@@ -391,7 +489,7 @@
 }
 @media (max-width: 1000px) {
   .recording-workflow {
-    padding: 0 20px 170px;
+    padding: 0 20px;
   }
   .workflow-screens {
     grid-template-columns: 1fr;
@@ -467,8 +565,8 @@
 }
 
 .workflow-editor .workspace.review-layout {
-  height: calc(100vh - 320px);
-  min-height: 600px;
+  flex: 1;
+  min-height: 0;
 }
 .workflow-editor .recorded-image-frame > img {
   max-height: 430px;
@@ -488,6 +586,7 @@
   .workflow-editor .workspace.review-layout {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
+    overflow: visible;
   }
   .workflow-editor .review-layout .editor {
     grid-column: 1;
@@ -500,9 +599,6 @@
   .workflow-stepper span {
     font-size: 12px;
     gap: 4px;
-  }
-  .workflow-footer {
-    left: 220px;
   }
 }
 .workflow-editor > footer {

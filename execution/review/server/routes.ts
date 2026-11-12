@@ -234,7 +234,7 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     executionRoot: options.executionRoot,
   });
   if (!options.layout.data) throw new Error('工作台需要配置 CUA_DATA_ROOT');
-  const cards = new RecordingCardStore(path.join(options.layout.data.root, 'workbench', 'console.sqlite'));
+  const cards = new RecordingCardStore(path.join(options.layout.data.root, 'workbench', 'cards.json'));
   cards.clearSession();
   const workflow = new RecordingWorkflow({ dataRoot: options.layout.data.root,
     skillsRoot: options.layout.skillsRoot, recordingsRoot: activeRecordingsRoot, executionRoot: options.executionRoot, cards, beforeAnalyze: () => {
@@ -252,7 +252,13 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
     const catalog = await listRecordings(recordingOptions());
     const active = recorder.status();
     return { ...catalog, recordings: catalog.recordings.filter(entry => entry.id !== active.recordingId) };
-  }, () => workflow.isBusy());
+  }, () => workflow.isBusy(), async (recordingId) => {
+    try {
+      await deleteRecording(recordingId, recordingOptions());
+    } catch (error) {
+      if (!(error instanceof Error && (error as { statusCode?: number }).statusCode === 404)) throw error;
+    }
+  });
   app.addHook('onClose', async () => { await recorder.close(); await workflow.close(); cards.close(); });
 
   if (!options.layout.data) throw new Error('任务运行页面需要配置 CUA_DATA_ROOT');
@@ -381,13 +387,14 @@ export const registerReviewRoutes: FastifyPluginAsync<ReviewRouteOptions> = asyn
         required: ['displayId'],
         properties: {
           displayId: { type: 'string', minLength: 1 },
+          language: { type: 'string', enum: ['zh-CN', 'en-US'] },
         },
         additionalProperties: false,
       },
     },
   }, async (request) => {
-    const body = requireObjectBody<StartRecorderBody>(request.body);
-    return recorder.start(body.displayId);
+    const body = requireObjectBody<StartRecorderBody & { language?: string }>(request.body);
+    return recorder.start(body.displayId, body.language);
   });
 
   app.post('/api/recorder/stop', async () => recorder.stop());

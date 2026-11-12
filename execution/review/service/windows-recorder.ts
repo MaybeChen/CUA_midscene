@@ -57,7 +57,7 @@ export interface RecorderControl {
   status(): RecorderStatus;
   refreshDisplays(): Promise<{ displays: RecorderDisplay[]; revision: string }>;
   preview(index: number): Promise<string>;
-  start(displayId: string): Promise<RecorderStatus>;
+  start(displayId: string, language?: string): Promise<RecorderStatus>;
   stop(): Promise<RecorderStatus>;
   close(): Promise<void>;
 }
@@ -173,7 +173,7 @@ export class WindowsRecorderManager implements RecorderControl {
     return previewPath;
   }
 
-  async start(displayId: string): Promise<RecorderStatus> {
+  async start(displayId: string, language?: string): Promise<RecorderStatus> {
     if (isActive(this.currentStatus.phase)) {
       throw Object.assign(new Error(`已有录制会话正在运行：${this.currentStatus.phase}`), { statusCode: 409 });
     }
@@ -182,10 +182,14 @@ export class WindowsRecorderManager implements RecorderControl {
     this.diagnostics = [];
     const pythonExecutable = await this.pythonExecutable();
     const spawnProcess = this.options.spawnProcess ?? spawn;
+    const args = ['record', '--display-id', displayId, '--output-root', outputRoot];
+    if (language === 'zh-CN' || language === 'en-US') {
+      args.push('--language', language);
+    }
     const child = spawnPythonWorker({
       pythonExecutable,
       module: 'cua_recorder',
-      args: ['record', '--display-id', displayId, '--output-root', outputRoot],
+      args,
       stdio: ['pipe', 'pipe', 'pipe'],
     }, spawnProcess) as ChildProcessWithoutNullStreams;
     this.child = child;

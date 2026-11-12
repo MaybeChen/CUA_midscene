@@ -5,6 +5,8 @@ import type {
 } from '../../../shared/recording-cards';
 import homeRecordIcon from '../assets/ucd/home-record-black.svg';
 import WorkbenchIcon from './WorkbenchIcon.vue';
+import { useI18n } from '../i18n';
+const { t, formatDateTime } = useI18n();
 defineProps<{
   result: RecordingCardPage;
   busy: boolean;
@@ -28,96 +30,91 @@ function color(id: string): string {
   ];
 }
 function date(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(value));
+  return formatDateTime(value);
 }
 </script>
 <template>
-  <section class="recording-home" aria-label="录制记录">
+  <section class="recording-home" :aria-label="t('card.homeTitle')">
     <header class="catalog-heading">
-      <h1><img :src="homeRecordIcon" alt="" />录制流程</h1>
+      <h1><img :src="homeRecordIcon" alt="" />{{ t('card.homeTitle') }}</h1>
       <div class="catalog-tools">
         <label class="card-search"
-          ><span class="sr-only">搜索流程</span
+          ><span class="sr-only">{{ t('card.homeTitle') }}</span
           ><input
             type="search"
             :value="query"
-            placeholder="请输入名称搜索"
+            :placeholder="t('card.searchPlaceholder')"
             maxlength="200"
             @input="
               emit('search', ($event.target as HTMLInputElement).value)
             " /><WorkbenchIcon name="search" /></label
-        ><button class="primary" @click="emit('create')">创建任务</button>
+        ><button class="primary" @click="emit('create')">{{ t('card.create') }}</button>
       </div>
     </header>
-    <div v-if="error" class="console-error" role="alert">
-      {{ error }}
-      <button class="text-button" @click="emit('retry')">重新加载</button>
-    </div>
-    <p v-if="busy" class="catalog-feedback" role="status">正在加载…</p>
-    <p v-else-if="!result.cards.length && !error" class="catalog-feedback">
-      {{ query ? '没有匹配的流程' : '暂无录制流程，点击“创建任务”开始' }}
-    </p>
-    <div class="recording-card-grid" :aria-busy="busy">
-      <article
-        v-for="card in result.cards"
-        :key="card.id"
-        class="recording-card"
-      >
-        <button class="card-open" @click="emit('open', card)">
-          <div class="card-title">
-            <span class="card-avatar" :class="color(card.id)">{{
-              Array.from(card.name)[0]?.toUpperCase()
-            }}</span>
-            <h2 :title="card.name">{{ card.name }}</h2>
+    <div class="home-scroll">
+      <div v-if="error" class="console-error" role="alert">
+        {{ error }}
+        <button class="text-button" @click="emit('retry')">{{ t('card.retry') }}</button>
+      </div>
+      <p v-if="busy" class="catalog-feedback" role="status">{{ t('card.loading') }}</p>
+      <p v-else-if="!result.cards.length && !error" class="catalog-feedback">
+        {{ query ? t('card.noMatch') : t('card.empty') }}
+      </p>
+      <div class="recording-card-grid" :aria-busy="busy">
+        <article
+          v-for="card in result.cards"
+          :key="card.id"
+          class="recording-card"
+        >
+          <button class="card-open" @click="emit('open', card)">
+            <div class="card-title">
+              <span class="card-avatar" :class="color(card.id)">{{
+                Array.from(card.name)[0]?.toUpperCase()
+              }}</span>
+              <h2 :title="card.name">{{ card.name }}</h2>
+            </div>
+            <p class="card-description">{{ card.description }}</p>
+          </button>
+          <span v-if="!card.recordingId" class="card-pending">{{ t('card.pending') }}</span>
+          <div class="card-bottom">
+            <button class="card-time" :aria-label="`${t('card.nav')} ${card.name}`" @click="emit('open', card)"><time :datetime="card.updatedAt">{{ date(card.updatedAt) }}</time></button>
+            <div class="card-actions">
+              <button
+                :aria-label="`${t('card.edit')} ${card.name}`"
+                :title="t('card.editTitle')"
+                @click="emit('edit', card)"
+              >
+                {{ t('card.edit') }}</button
+              ><button
+                :aria-label="`${t('card.delete')} ${card.name}`"
+                :title="t('card.deleteTitle')"
+                @click="emit('remove', card)"
+              >
+                <WorkbenchIcon name="trash" />
+              </button>
+            </div>
           </div>
-          <p class="card-description">{{ card.description }}</p>
+        </article>
+      </div>
+      <nav v-if="result.total" class="card-pagination" :aria-label="t('card.pagination', { total: result.total })">
+        <span>{{ t('card.pagination', { total: result.total }) }}</span
+        ><button
+          :disabled="busy || result.page <= 1"
+          :aria-label="t('card.prevPage')"
+          @click="emit('page', result.page - 1)"
+        >
+          ‹</button
+        ><span
+          >{{ result.page }} /
+          {{ Math.max(1, Math.ceil(result.total / result.pageSize)) }}</span
+        ><button
+          :disabled="busy || result.page * result.pageSize >= result.total"
+          :aria-label="t('card.nextPage')"
+          @click="emit('page', result.page + 1)"
+        >
+          ›
         </button>
-        <span v-if="!card.recordingId" class="card-pending">待录制</span>
-        <div class="card-bottom">
-          <button class="card-time" :aria-label="`打开 ${card.name}`" @click="emit('open', card)"><time :datetime="card.updatedAt">{{ date(card.updatedAt) }}</time></button>
-          <div class="card-actions">
-            <button
-              :aria-label="`编辑 ${card.name}`"
-              title="修改名称和描述"
-              @click="emit('edit', card)"
-            >
-              编辑</button
-            ><button
-              :aria-label="`删除 ${card.name}`"
-              title="删除卡片"
-              @click="emit('remove', card)"
-            >
-              <WorkbenchIcon name="trash" />
-            </button>
-          </div>
-        </div>
-      </article>
+      </nav>
     </div>
-    <nav v-if="result.total" class="card-pagination" aria-label="分页">
-      <span>共 {{ result.total }} 条</span
-      ><button
-        :disabled="busy || result.page <= 1"
-        aria-label="上一页"
-        @click="emit('page', result.page - 1)"
-      >
-        ‹</button
-      ><span
-        >{{ result.page }} /
-        {{ Math.max(1, Math.ceil(result.total / result.pageSize)) }}</span
-      ><button
-        :disabled="busy || result.page * result.pageSize >= result.total"
-        aria-label="下一页"
-        @click="emit('page', result.page + 1)"
-      >
-        ›
-      </button>
-    </nav>
   </section>
 </template>

@@ -4,6 +4,8 @@ import App from '../App.vue';
 import backIcon from '../assets/ucd/record-back.svg';
 import RecordingWorkflowView from './RecordingWorkflowView.vue';
 import { api } from '../api';
+import { useI18n } from '../i18n';
+const { t } = useI18n();
 import type {
   RecordingCard,
   RecordingCardInput,
@@ -24,7 +26,7 @@ const result = ref<RecordingCardPage>({
   cards: [],
   total: 0,
   page: 1,
-  pageSize: 16,
+  pageSize: 20,
 });
 const recent = ref<RecentRecordingCard[]>([]);
 const query = ref('');
@@ -174,10 +176,10 @@ function relativeTime(value: string): string {
     0,
     Math.floor((clock.value - Date.parse(value)) / 60000),
   );
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes}分钟`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时`;
-  return `${Math.floor(minutes / 1440)}天`;
+  if (minutes < 1) return t('card.justNow');
+  if (minutes < 60) return t('card.minutesAgo', { n: minutes });
+  if (minutes < 1440) return t('card.hoursAgo', { n: Math.floor(minutes / 60) });
+  return t('card.daysAgo', { n: Math.floor(minutes / 1440) });
 }
 onMounted(async () => {
   window.addEventListener('popstate', restore);
@@ -208,7 +210,7 @@ onUnmounted(() => {
           >GDE Claw</strong
         >
       </div>
-      <nav aria-label="控制台导航">
+      <nav :aria-label="t('card.title')">
         <button
           class="console-nav"
           :class="{
@@ -217,10 +219,10 @@ onUnmounted(() => {
           }"
           @click="navigate('home')"
         >
-          <WorkbenchIcon name="workflow" />流程录制
+          <WorkbenchIcon name="workflow" />{{ t('card.nav') }}
         </button>
       </nav>
-      <h2 class="recent-heading">最近访问</h2>
+      <h2 class="recent-heading">{{ t('card.recentHeading') }}</h2>
       <div class="recent-list">
         <button
           v-for="entry in recent"
@@ -234,21 +236,20 @@ onUnmounted(() => {
             relativeTime(entry.lastVisitedAt)
           }}</time>
         </button>
-        <p v-if="!recent.length" class="recent-empty">暂无访问记录</p>
+        <p v-if="!recent.length" class="recent-empty">{{ t('card.recentEmpty') }}</p>
       </div>
-      <nav v-if="devEnabled" class="console-secondary-nav" aria-label="工作区">
+      <nav v-if="devEnabled" class="console-secondary-nav" :aria-label="t('card.devTools')">
 
         <button
           v-if="devEnabled"
           :class="{ active: !home && activeMode === 'agent' }"
           @click="navigate('agent')"
         >
-          开发调试
+          {{ t('card.devTools') }}
         </button>
       </nav>
     </aside>
     <div class="console-content">
-      <div class="console-titlebar" aria-hidden="true"></div>
       <RecordingCatalog
         v-if="home"
         :result="result"
@@ -268,7 +269,7 @@ onUnmounted(() => {
           <div>
             <button
               class="detail-back"
-              aria-label="返回首页"
+              :aria-label="t('card.nav')"
               @click="navigate('home')"
             ><img :src="backIcon" alt="" /></button>
             <h1>{{ card.name }}</h1>
@@ -291,11 +292,11 @@ onUnmounted(() => {
     />
     <ConfirmDialog
       :open="!!deleting"
-      title="删除流程卡片"
-      message="删除卡片及其访问记录，原始录制文件和已生成技能会保留。"
+      :title="t('card.confirmDelete')"
+      :message="t('card.deleteMessage')"
       :target="deleting?.name ?? ''"
-      confirm-label="删除"
-      cancel-label="取消"
+      :confirm-label="t('card.deleteConfirm')"
+      :cancel-label="t('card.cancel')"
       :busy="saving"
       @confirm="remove"
       @cancel="deleting = undefined"

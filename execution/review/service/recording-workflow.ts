@@ -1,6 +1,5 @@
 import { loadPublishedSkillResult } from './review-skill.js';
 import type { WorkflowResult } from '../shared/workflow.js';
-import Database from 'better-sqlite3';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { withSkillWriteLock } from '../../cua/skills/lock.js';
@@ -10,9 +9,14 @@ import type { WorkflowStatus } from '../shared/workflow.js';
 import type { GenerationLanguage } from '../shared/types.js';
 import { prepareRecordingSkill, publishRecordingDraft } from '../../cua/skills/create.js';
 import { describeRecording, resolveRecordingDirectory, openRecordingDirectory } from '../../cua/recording/recording-catalog.js';
+import { JsonStore } from './json-store.js';
+
+interface WorkflowState {
+  workflows: Record<string, WorkflowStatus>;
+}
 
 export class RecordingWorkflow {
-  private readonly db: Database.Database;
+  private readonly store: JsonStore<WorkflowState>;
   private active?: { id: string; controller: AbortController; completion: Promise<void> };
   constructor(
     private readonly options: {
@@ -28,20 +32,24 @@ export class RecordingWorkflow {
       publish?: typeof publishRecordingDraft;
     } = {},
   ) {
-    this.db = new Database(path.join(options.dataRoot, 'workbench', 'console.sqlite'));
-    this.db.pragma('busy_timeout = 5000');
-    this.db.exec(`CREATE TABLE IF NOT EXISTS workflows (cardId TEXT PRIMARY KEY REFERENCES recording_cards(id) ON DELETE CASCADE, recordingId TEXT NOT NULL,
-      phase TEXT NOT NULL, skillName TEXT NOT NULL, draftRoot TEXT NOT NULL, error TEXT NOT NULL, log TEXT NOT NULL)`);
-    this.db
-      .prepare(
-        "UPDATE workflows SET phase = 'failed', error = '服务重启，处理已中断，请检查后重试' WHERE phase IN ('analyzing','publishing')",
-      )
-      .run();
+    this.store = new JsonStore(
+      path.join(options.dataRoot, 'workbench', 'workflows.json'),
+      () => ({ workflows: {} }),
+    );
+    // 进程重启后，之前处于进行中的任务已不可能完成，标记为失败。
+    this.store.update((state) => {
+      for (const status of Object.values(state.workflows)) {
+        if (status.phase === 'analyzing' || status.phase === 'publishing') {
+          status.phase = 'failed';
+          status.error = '服务重启，处理已中断，请检查后重试';
+        }
+      }
+    });
   }
   status(id: string): WorkflowStatus {
     const card = this.options.cards.get(id);
-    const row = this.db.prepare('SELECT * FROM workflows WHERE cardId = ?').get(id) as WorkflowStatus | undefined;
-    if (row && row.recordingId === card.recordingId) return row;
+    const row = this.store.value.workflows[id];
+    if (row && row.recordingId === card.recordingId) return { ...row };
     return {
       cardId: id,
       recordingId: card.recordingId ?? '',
@@ -70,11 +78,9 @@ export class RecordingWorkflow {
     return !!this.active;
   }
   private write(value: WorkflowStatus): void {
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO workflows VALUES (@cardId,@recordingId,@phase,@skillName,@draftRoot,@error,@log)',
-      )
-      .run(value);
+    this.store.update((state) => {
+      state.workflows[value.cardId] = { ...value };
+    });
   }
   async analyze(id: string, language: GenerationLanguage): Promise<WorkflowStatus> {
     if (this.active) throw Object.assign(new Error('已有任务正在处理'), { statusCode: 409 });
@@ -179,6 +185,5 @@ export class RecordingWorkflow {
   async close(): Promise<void> {
     if (this.active && this.status(this.active.id).phase === 'analyzing') this.active.controller.abort();
     await this.active?.completion;
-    this.db.close();
   }
 }

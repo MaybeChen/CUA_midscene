@@ -12,6 +12,8 @@ from .protocol import RecorderError
 BORDER_WIDTH = 10
 BORDER_COLOR = (101, 185, 94)
 NOTICE_TEXT = "请将需要录制的窗口放在绿框范围内，并确保后续操作窗口不超出绿框范围。"
+NOTICE_TEXT_EN = "Place the window to record inside the green box, and make sure later windows stay within it."
+NOTICE_TEXT_BY_LANGUAGE = {"zh-CN": NOTICE_TEXT, "en-US": NOTICE_TEXT_EN}
 NOTICE_FONT_SIZE = 14
 ACTIVE_PHASES = {"arming", "armed", "starting", "recording", "stopping"}
 
@@ -23,12 +25,13 @@ def _rgb(red: int, green: int, blue: int) -> int:
 class RecordingGuidance:
     """固定在所选屏幕的边框与准备提示；点击穿透并排除出录制画面。"""
 
-    def __init__(self, display: DisplayInfo, user: Any, gdi: Any, paint_type: type[ctypes.Structure]) -> None:
+    def __init__(self, display: DisplayInfo, user: Any, gdi: Any, paint_type: type[ctypes.Structure], language: str = "zh-CN") -> None:
         self.display, self.user, self.gdi = display, user, gdi
         self.hwnd = 0
         self._font = 0
         self._phase = ""
         self._notice = False
+        self._notice_text = NOTICE_TEXT_BY_LANGUAGE.get(language, NOTICE_TEXT)
         self._paint_type = paint_type
 
     def px(self, value: float) -> int:
@@ -37,7 +40,7 @@ class RecordingGuidance:
     def notice_rect(self) -> tuple[int, int, int, int]:
         width = min(self.px(560), self.display.width - self.px(36))
         text_width = max(1, width - self.px(64))
-        lines = math.ceil(self.px(NOTICE_FONT_SIZE) * len(NOTICE_TEXT) / text_width)
+        lines = math.ceil(self.px(NOTICE_FONT_SIZE) * len(self._notice_text) / text_width)
         height = self.px(max(56, lines * 22 + 24))
         left = (self.display.width - width) // 2
         top = self.px(14)
@@ -152,11 +155,11 @@ class RecordingGuidance:
             self._paint_info_icon(dc, left + self.px(16), (top + bottom) // 2)
             self.gdi.SetTextColor(dc, _rgb(30, 30, 30))
             rect = wt.RECT(left + self.px(40), top + self.px(12), right - self.px(16), bottom - self.px(12))
-            self.user.DrawTextW(dc, NOTICE_TEXT, -1, ctypes.byref(rect), 0x0410 | 0x0800)
+            self.user.DrawTextW(dc, self._notice_text, -1, ctypes.byref(rect), 0x0410 | 0x0800)
             text_height = rect.bottom - rect.top
             rect.top = top + (bottom - top - text_height) // 2
             rect.bottom = rect.top + text_height
-            self.user.DrawTextW(dc, NOTICE_TEXT, -1, ctypes.byref(rect), 0x0010 | 0x0800)
+            self.user.DrawTextW(dc, self._notice_text, -1, ctypes.byref(rect), 0x0010 | 0x0800)
         finally:
             self.gdi.SelectObject(dc, old_font)
 

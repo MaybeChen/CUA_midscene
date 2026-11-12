@@ -108,7 +108,7 @@ export async function request<T>(pathname: string, init: RequestInit = {}): Prom
 
 export const api = {
   syncRecordingCards: () => request<{ synced: true }>('/api/recording-cards/sync', { method: 'POST' }),
-  recordingCards: (query = '', page = 1) => request<RecordingCardPage>(`/api/recording-cards?${new URLSearchParams({ query, page: String(page) })}`),
+  recordingCards: (query = '', page = 1, pageSize = 20) => request<RecordingCardPage>(`/api/recording-cards?${new URLSearchParams({ query, page: String(page), pageSize: String(pageSize) })}`),
   recordingCard: (id: string) => request<RecordingCard>(`/api/recording-cards/${encodeURIComponent(id)}`),
   recentRecordingCards: () => request<{ cards: RecentRecordingCard[] }>('/api/recording-cards/recent'),
   createRecordingCard: (body: RecordingCardInput) => request<RecordingCard>('/api/recording-cards', { method: 'POST', body: JSON.stringify(body) }),

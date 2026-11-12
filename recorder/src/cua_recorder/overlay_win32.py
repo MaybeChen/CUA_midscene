@@ -239,9 +239,10 @@ def _window_class_type(procedure_type: Any) -> type[ctypes.Structure]:
 class RecorderOverlay:
     """录制 Worker 拥有的非激活、捕获排除桌面工具窗。"""
 
-    def __init__(self, display: DisplayInfo, command: Callable[[str], None]) -> None:
+    def __init__(self, display: DisplayInfo, command: Callable[[str], None], language: str = "zh-CN") -> None:
         self._display = display
         self._command = command
+        self._language = language
         self._state = ToolbarState()
         self._scale = display.scale_factor
         self._ready = threading.Event()
@@ -313,7 +314,7 @@ class RecorderOverlay:
             instance = self._register_window_class(class_name, kernel)
             registered = True
             self._create_window(class_name, instance)
-            self._guidance = RecordingGuidance(self._display, user, gdi, PaintStruct)
+            self._guidance = RecordingGuidance(self._display, user, gdi, PaintStruct, self._language)
             self._guidance.create(class_name, instance)
             self._show_window()
             self._message_loop()
