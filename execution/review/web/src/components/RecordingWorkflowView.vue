@@ -56,6 +56,13 @@ const activeStep = computed(() => phase.value === 'idle' ? 1 : 2);
 const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
 const progress = computed(() => skillGenerationProgress(status.value?.log ?? '', phase.value));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
+const progressHeading = computed(() => {
+  if (phase.value === 'analyzing') return t('workflow.generatingTask');
+  if (phase.value === 'publishing') return t('workflow.packaging');
+  if (phase.value === 'stopped') return t('workflow.stopped');
+  if (phase.value === 'editing') return t('workflow.waitingSync');
+  return t('workflow.failed');
+});
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
   fetching = true;
@@ -154,17 +161,7 @@ onUnmounted(() => {
           :role="running ? 'status' : 'alert'"
         >
           <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress }" role="progressbar" :aria-label="t('workflow.progressAria')" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="progress?.completed"><span :style="progress ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
-          <h3>
-            {{
-              phase === 'analyzing'
-                ? t('workflow.generatingTask')
-                : phase === 'publishing'
-                  ? t('workflow.packaging')
-                  : phase === 'stopped'
-                    ? t('workflow.stopped')
-                    : phase === 'editing' ? t('workflow.waitingSync') : t('workflow.failed')
-            }}
-          </h3>
+          <h3>{{ progressHeading }}</h3>
           <p v-if="running">
             {{
               phase === 'analyzing'

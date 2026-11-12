@@ -130,6 +130,19 @@ const elapsedRecording = computed(() => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 });
 
+const recorderPhaseLabel = computed(() => {
+  if (recorderStatus.value.phase === 'arming') return t('recording.preparing');
+  if (recorderStatus.value.phase === 'armed') return t('recording.armed');
+  if (recorderStatus.value.phase === 'starting') return t('recording.starting');
+  if (recorderStatus.value.phase === 'stopping') return t('recording.stopping');
+  return t('recording.active');
+});
+const recorderStopLabel = computed(() => {
+  if (recorderStatus.value.phase === 'stopping') return t('recording.stoppingButton');
+  if (recorderStatus.value.phase === 'armed') return t('recording.cancelReady');
+  return t('recording.stopNow');
+});
+
 function formatSize(size: number | undefined): string {
   if (size === undefined) return t('common.notFound');
   if (size < 1024) return `${size} B`;
@@ -148,9 +161,9 @@ function applyCatalog(next: ReviewRecordingCatalog): void {
     message.value = () => t('recording.notConfigured', { name: next.envName });
     return;
   }
-  selectedId.value = next.recordings.some((item) => item.id === selectedId.value)
-    ? selectedId.value
-    : props.cardId ? '' : next.recordings[0]?.id ?? '';
+  if (!next.recordings.some((item) => item.id === selectedId.value)) {
+    selectedId.value = props.cardId ? '' : next.recordings[0]?.id ?? '';
+  }
   message.value = next.recordings.length
     ? () => t('recording.found', { count: next.recordings.length })
     : () => t('recording.empty');
@@ -347,17 +360,14 @@ onUnmounted(() => {
     <template v-if="recorderCollapsed">
       <span class="recorder-live-dot" :class="{ armed: recorderStatus.phase === 'armed' || recorderStatus.phase === 'arming' }"></span>
       <div class="recorder-live-copy">
-        <strong>{{ recorderStatus.phase === 'arming' ? t('recording.preparing')
-          : recorderStatus.phase === 'armed' ? t('recording.armed')
-            : recorderStatus.phase === 'starting' ? t('recording.starting')
-              : recorderStatus.phase === 'stopping' ? t('recording.stopping') : t('recording.active') }}</strong>
+        <strong>{{ recorderPhaseLabel }}</strong>
         <small v-if="recorderStatus.phase === 'armed'">{{ t('recording.switchAndStart', { hotkey: recorderStatus.hotkey || 'Ctrl+Shift+F9' }) }}</small>
         <small v-else-if="recorderStatus.phase === 'recording'">{{ t('recording.stopHint', { id: recorderStatus.recordingId || '', elapsed: elapsedRecording, hotkey: recorderStatus.hotkey || 'Ctrl+Shift+F9' }) }}</small>
         <small v-else>{{ recorderStatus.recordingId || t('recording.registeringHotkey') }}</small>
       </div>
       <button class="destructive recorder-stop" type="button"
         :disabled="recorderBusy || recorderStatus.phase === 'arming' || recorderStatus.phase === 'stopping'"
-        @click="stopRecorder">{{ recorderStatus.phase === 'stopping' ? t('recording.stoppingButton') : recorderStatus.phase === 'armed' ? t('recording.cancelReady') : t('recording.stopNow') }}</button>
+        @click="stopRecorder">{{ recorderStopLabel }}</button>
     </template>
     <template v-else>
       <div class="recorder-heading">

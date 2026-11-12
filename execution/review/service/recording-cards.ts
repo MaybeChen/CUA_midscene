@@ -102,7 +102,10 @@ export class RecordingCardStore {
           card.name.toLowerCase().includes(needle) ||
           card.description.toLowerCase().includes(needle),
       )
-      .sort((a, b) => (a.updatedAt === b.updatedAt ? (a.id < b.id ? 1 : -1) : a.updatedAt < b.updatedAt ? 1 : -1));
+      .sort((a, b) => {
+        if (a.updatedAt === b.updatedAt) return a.id < b.id ? 1 : -1;
+        return a.updatedAt < b.updatedAt ? 1 : -1;
+      });
     const total = matched.length;
     const current = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
     const start = (current - 1) * pageSize;
@@ -129,11 +132,10 @@ export class RecordingCardStore {
         return card ? { ...card, lastVisitedAt } : null;
       })
       .filter((item): item is RecentRecordingCard => item !== null)
-      .sort((a, b) =>
-        a.lastVisitedAt === b.lastVisitedAt
-          ? a.id < b.id ? 1 : -1
-          : a.lastVisitedAt < b.lastVisitedAt ? 1 : -1,
-      )
+      .sort((a, b) => {
+        if (a.lastVisitedAt === b.lastVisitedAt) return a.id < b.id ? 1 : -1;
+        return a.lastVisitedAt < b.lastVisitedAt ? 1 : -1;
+      })
       .slice(0, 10);
   }
 
