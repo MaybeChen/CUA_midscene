@@ -8,7 +8,7 @@ import { requireSkillName, safeSkillFile } from '../../cua/skills/paths.js';
 import { describeRecording, resolveRecordingDirectory } from '../../cua/recording/recording-catalog.js';
 import { RecordingGenerationManager } from '../service/recording-generation.js';
 import { deleteReviewSkill, loadReviewSkill, saveReviewSkill } from '../service/review-skill.js';
-import { applyReviewMutation } from '../service/task-mutations.js';
+import { applyReviewMutation } from '../shared/task-mutations.js';
 import { uploadSkillReferenceImage } from '../service/reference-images.js';
 import { referenceImageMaxBytes } from '../shared/reference-upload.js';
 import { defaultStepEditor } from '../shared/step-editor.js';

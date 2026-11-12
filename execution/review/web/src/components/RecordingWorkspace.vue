@@ -339,7 +339,7 @@ onUnmounted(() => {
       </div>
       <p v-for="problem in selected.errors" :key="problem" class="console-error">{{ problem }}</p>
       </div>
-      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">{{ t('workflow.reRecord') }}</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">{{ t('workflow.analyze') }}</button></div>
+      <div class="workflow-footer"><button class="secondary" @click="rerecord = true; refreshRecorderDisplays()">{{ t('workflow.reRecord') }}</button><button class="primary" :disabled="!selected.ready" @click="emit('analyze')">{{ t('workflow.step3') }}</button></div>
     </template>
   </div>
   <template v-else>

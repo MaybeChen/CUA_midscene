@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { recordingProgress } from '../recording-progress';
+import { skillGenerationProgress } from '../recording-progress';
 import folderIcon from '../assets/ucd/record-floder.svg';
 import copyIcon from '../assets/ucd/record-copy.svg';
 import importantIcon from '../assets/ucd/record-important.svg';
@@ -17,11 +17,23 @@ const { locale, t } = useI18n();
 const status = ref<WorkflowStatus>();
 const error = ref('');
 const actionBusy = ref(false);
-const publishing = ref(false);
-let publishHoldTimer: ReturnType<typeof setTimeout> | undefined;
-const phaseFrozen = ref(false);
 const recording = ref(false);
 const result = ref<WorkflowResult>();
+const resultTab = ref<'overview' | 'steps'>('overview');
+const stepsVisited = ref(false);
+function selectResultTab(tab: 'overview' | 'steps'): void {
+  resultTab.value = tab;
+  if (tab === 'steps') stepsVisited.value = true;
+}
+function moveResultTab(tab: 'overview' | 'steps'): void {
+  selectResultTab(tab);
+  document.getElementById(`skill-${tab}-tab`)?.focus();
+}
+async function savedSteps(): Promise<void> {
+  showToast(t('workflow.stepsSaved'));
+  try { result.value = await request(`${root}/result`); }
+  catch (cause) { showToast(cause instanceof Error ? cause.message : String(cause), true); }
+}
 const toast = ref<{ message: string; error: boolean }>();
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function showToast(message: string, error = false): void {
@@ -39,14 +51,10 @@ let disposed = false;
 const renderedContent = computed(() =>
   DOMPurify.sanitize(marked.parse((result.value?.content ?? '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ''), { async: false }) as string),
 );
-const phase = computed(() => {
-  if (recording.value) return 'idle';
-  if (phaseFrozen.value) return 'editing';
-  return status.value?.phase ?? 'idle';
-});
-const activeStep = computed(() => (['idle'].includes(phase.value) ? 1 : phase.value === 'done' ? 3 : 2));
+const phase = computed(() => (recording.value ? 'idle' : (status.value?.phase ?? 'idle')));
+const activeStep = computed(() => phase.value === 'idle' ? 1 : 2);
 const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
-const progress = computed(() => recordingProgress(status.value?.log ?? ''));
+const progress = computed(() => skillGenerationProgress(status.value?.log ?? '', phase.value));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
@@ -55,7 +63,9 @@ async function refresh(): Promise<void> {
     const next = await request<WorkflowStatus>(`${root}/workflow`);
     if (disposed) return;
     status.value = next;
-    if (next.phase === 'done' && !result.value) result.value = await request(`${root}/result`);
+    if (next.phase === 'editing') status.value = await request<WorkflowStatus>(`${root}/publish`, { method: 'POST' });
+    if (status.value?.phase === 'done' && !result.value) result.value = await request(`${root}/result`);
+    error.value = '';
   } catch (cause) {
     error.value = String(cause instanceof Error ? cause.message : cause);
   } finally {
@@ -72,59 +82,14 @@ async function action(name: 'analyze' | 'publish' | 'stop'): Promise<void> {
       ...(name === 'analyze' ? { body: JSON.stringify({ language: locale.value }) } : {}),
     });
     result.value = undefined;
+    resultTab.value = 'overview';
+    stepsVisited.value = false;
     await refresh();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     actionBusy.value = false;
   }
-}
-async function publish(): Promise<void> {
-  if (publishing.value) return;
-  publishing.value = true;
-  phaseFrozen.value = true;
-  error.value = '';
-  let hold = false;
-  try {
-    status.value = await request<WorkflowStatus>(`${root}/publish`, { method: 'POST' });
-    for (;;) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      if (disposed) return;
-      await refresh();
-      const next = status.value;
-      if (!next) continue;
-      if (next.phase === 'done') {
-        try {
-          if (!result.value) result.value = await request(`${root}/result`);
-        } catch { /* 结果暂不可用，回到编辑页 */ }
-        if (result.value) {
-          hold = true;
-          showToast(t('workflow.published'), false);
-        } else {
-          showToast(next.error || t('workflow.publishError'), true);
-          status.value = { ...next, phase: 'editing' };
-          await refresh();
-        }
-        return;
-      }
-      if (next.phase === 'failed' || next.phase === 'stopped') {
-        showToast(next.error || t('workflow.publishError'), true);
-        return;
-      }
-    }
-  } catch (cause) {
-    showToast(cause instanceof Error ? cause.message : String(cause) || t('workflow.publishError'), true);
-  } finally {
-    if (hold && !disposed) {
-      publishHoldTimer = setTimeout(() => { publishing.value = false; publishHoldTimer = undefined; }, 800);
-    } else {
-      publishing.value = false;
-    }
-    phaseFrozen.value = false;
-  }
-}
-async function analyze(): Promise<void> {
-  await action('analyze');
 }
 async function copy(): Promise<void> {
   try {
@@ -151,7 +116,6 @@ onUnmounted(() => {
   disposed = true;
   if (poll) clearInterval(poll);
   if (toastTimer) clearTimeout(toastTimer);
-  if (publishHoldTimer) clearTimeout(publishHoldTimer);
 });
 </script>
 <template>
@@ -159,7 +123,7 @@ onUnmounted(() => {
     <Teleport to="body"><Transition name="workflow-toast"><div v-if="toast" class="workflow-toast" :class="{ error: toast.error }" role="status" aria-live="polite">{{ toast.message }}</div></Transition></Teleport>
     <nav class="workflow-stepper" :aria-label="t('workflow.phaseAria')">
       <span
-        v-for="(label, index) in [t('workflow.step1'), t('workflow.step2'), t('workflow.step3')]"
+        v-for="(label, index) in [t('workflow.step1'), t('workflow.step3')]"
         :key="label"
         :class="{ current: activeStep === index + 1, complete: activeStep > index + 1 }"
         :aria-current="activeStep === index + 1 ? 'step' : undefined"
@@ -168,86 +132,95 @@ onUnmounted(() => {
       >
     </nav>
     <div class="workflow-scroll">
-      <p v-if="error" class="console-error" role="alert">{{ error }}</p>
-      <p v-if="!status" class="catalog-feedback">{{ t('workflow.loading') }}</p>
-      <div v-else-if="phase === 'idle'" class="branch-fill">
-        <RecordingWorkspace
-          :key="card.id"
-          :card-id="card.id"
-          :recording-id="card.recordingId"
-          :skills-configured="true"
-          @analyze="analyze()"
-          @folder-error="showToast($event, true)"
-        />
-      </div>
-      <template v-else-if="running || phase === 'failed' || phase === 'stopped'">
-        <div class="workflow-content workflow-progress-wrap">
-        <section class="workflow-progress-panel">
-          <h2>{{ t('workflow.taskProgress') }}</h2>
-          <div
-            class="workflow-progress-message"
-            :class="{ failed: phase === 'failed', stopped: phase === 'stopped' }"
-            :role="running ? 'status' : 'alert'"
-          >
-            <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress || phase !== 'analyzing' }" role="progressbar" :aria-label="t('workflow.progressAria')" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="phase === 'analyzing' ? progress?.completed : undefined"><span :style="progress && phase === 'analyzing' ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
-            <h3>
-              {{
-                phase === 'analyzing'
-                  ? t('workflow.generatingTask')
-                  : phase === 'publishing'
-                    ? t('workflow.packaging')
-                    : phase === 'stopped'
-                      ? t('workflow.stopped')
-                      : t('workflow.failed')
-              }}
-            </h3>
-            <p v-if="running">
-              {{
-                phase === 'analyzing'
-                  ? t('workflow.generatingHelp')
-                  : t('workflow.publishingHelp')
-              }}
-            </p>
-            <p v-if="status?.error">{{ status.error }}</p>
-            <pre v-if="displayLog">{{ displayLog }}</pre>
-          </div>
-        </section>
+    <p v-if="error" class="console-error" role="alert">{{ error }}</p>
+    <p v-if="!status" class="catalog-feedback">{{ t('workflow.loading') }}</p>
+    <div v-else-if="phase === 'idle'" class="branch-fill">
+    <RecordingWorkspace
+      :key="card.id"
+      :card-id="card.id"
+      :recording-id="card.recordingId"
+      :skills-configured="true"
+      @analyze="action('analyze')"
+      @folder-error="showToast($event, true)"
+    />
+    </div>
+    <template v-else-if="running || phase === 'failed' || phase === 'stopped' || phase === 'editing'">
+      <div class="workflow-content workflow-progress-wrap">
+      <section class="workflow-progress-panel">
+        <h2>{{ t('workflow.taskProgress') }}</h2>
+        <div
+          class="workflow-progress-message"
+          :class="{ failed: phase === 'failed', stopped: phase === 'stopped' }"
+          :role="running ? 'status' : 'alert'"
+        >
+          <div v-if="running" class="workflow-progress-bar" :class="{ indeterminate: !progress }" role="progressbar" :aria-label="t('workflow.progressAria')" :aria-valuemin="0" :aria-valuemax="progress?.total" :aria-valuenow="progress?.completed"><span :style="progress ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span></div>
+          <h3>
+            {{
+              phase === 'analyzing'
+                ? t('workflow.generatingTask')
+                : phase === 'publishing'
+                  ? t('workflow.packaging')
+                  : phase === 'stopped'
+                    ? t('workflow.stopped')
+                    : phase === 'editing' ? t('workflow.waitingSync') : t('workflow.failed')
+            }}
+          </h3>
+          <p v-if="running">
+            {{
+              phase === 'analyzing'
+                ? t('workflow.generatingHelp')
+                : t('workflow.publishingHelp')
+            }}
+          </p>
+          <p v-if="status?.error">{{ status.error }}</p>
+          <pre v-if="displayLog">{{ displayLog }}</pre>
         </div>
-        <div class="workflow-footer">
-          <template v-if="!running"
-            ><button class="secondary" @click="recording = true">{{ t('workflow.backToRecording') }}</button
-            ><button v-if="status?.skillName" class="secondary" @click="status.phase = 'editing'">{{ t('workflow.backToEditing') }}</button
-            ><button class="primary" :disabled="actionBusy || publishing" @click="status?.skillName ? publish() : analyze()">
-              {{ t('workflow.retry') }}
-            </button></template
-          ><button v-else-if="phase === 'analyzing'" class="secondary" :disabled="actionBusy" @click="action('stop')">
-            {{ t('workflow.stopTask') }}
-          </button>
-        </div>
-      </template>
-      <div v-else-if="phase === 'editing'" class="branch-fill">
-        <App :draft-card-id="card.id" :draft-task-title="card.name" @publish="publish()" />
+      </section>
       </div>
-      <div v-else-if="phase === 'done' && result" class="workflow-content">
-        <div class="workflow-result-copy">
-          <span>{{ t('workflow.copyHint') }}</span>
-          <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" :aria-label="t('workflow.copy')" :title="t('workflow.copy')" @click="copy()"><img :src="copyIcon" alt="" /></button></div>
-        </div>
-        <article class="workflow-result-card">
-          <header class="workflow-skill-heading">
-            <span class="card-avatar purple">S</span>
-            <h2 :title="result.name">{{ result.name }}</h2>
-            <span v-if="result.version" class="workflow-skill-version">{{ result.version.startsWith('v') ? result.version : `v${result.version}` }}</span>
-            <span class="workflow-skill-origin">{{ t('workflow.custom') }}</span>
-          </header>
-          <div class="workflow-skill-details">
-            <p class="workflow-skill-description">{{ result.description }}</p>
-            <div class="workflow-install-directory"><span>{{ t('workflow.installDir') }}</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon workflow-install-open" :disabled="openingDirectory" :aria-label="t('workflow.openInstallDir')" :title="t('workflow.openInstallDir')" @click="openInstallDirectory"><img :src="folderIcon" alt="" /></button></div>
-          </div>
-        </article>
-        <h2 class="workflow-content-label"><img :src="importantIcon" :alt="t('card.required')" />{{ t('workflow.content') }}</h2>
-        <article class="workflow-skill-content" v-html="renderedContent"></article>
+      <div class="workflow-footer">
+        <template v-if="!running"
+          ><button class="secondary" @click="recording = true">{{ t('workflow.backToRecording') }}</button
+          ><button class="primary" :disabled="actionBusy" @click="action(status?.skillName ? 'publish' : 'analyze')">
+            {{ t('workflow.retry') }}
+          </button></template
+        ><button v-else-if="phase === 'analyzing'" class="secondary" :disabled="actionBusy" @click="action('stop')">
+          {{ t('workflow.stopTask') }}
+        </button>
       </div>
+    </template>
+    <template v-else-if="phase === 'done' && result">
+      <div class="workflow-result-tabs" role="tablist" :aria-label="t('workflow.resultAria')">
+        <button id="skill-overview-tab" role="tab" :aria-selected="resultTab === 'overview'" aria-controls="skill-overview-panel" :tabindex="resultTab === 'overview' ? 0 : -1" @click="selectResultTab('overview')" @keydown.right.prevent="moveResultTab('steps')">{{ t('workflow.overview') }}</button>
+        <button id="skill-steps-tab" role="tab" :aria-selected="resultTab === 'steps'" aria-controls="skill-steps-panel" :tabindex="resultTab === 'steps' ? 0 : -1" @click="selectResultTab('steps')" @keydown.left.prevent="moveResultTab('overview')">{{ t('workflow.taskSteps') }}</button>
+      </div>
+      <div v-show="resultTab === 'overview'" id="skill-overview-panel" class="workflow-content" role="tabpanel" aria-labelledby="skill-overview-tab">
+      <div class="workflow-result-copy">
+        <span>{{ t('workflow.copyHint') }}</span>
+        <div class="workflow-command"><code>{{ invocation }}</code><button class="workflow-copy-icon" :aria-label="t('workflow.copy')" :title="t('workflow.copy')" @click="copy()"><img :src="copyIcon" alt="" /></button></div>
+      </div>
+      <article class="workflow-result-card">
+        <header class="workflow-skill-heading">
+          <span class="card-avatar purple">S</span>
+          <h2 :title="result.name">{{ result.name }}</h2>
+          <span v-if="result.version" class="workflow-skill-version">{{ result.version.startsWith('v') ? result.version : `v${result.version}` }}</span>
+          <span class="workflow-skill-origin">{{ t('workflow.custom') }}</span>
+        </header>
+        <div class="workflow-skill-details">
+          <p class="workflow-skill-description">{{ result.description }}</p>
+          <div class="workflow-install-directory"><span>{{ t('workflow.installDir') }}</span><span class="workflow-install-path" :title="result.installPath">{{ result.installPath }}</span><button class="workflow-copy-icon workflow-install-open" :disabled="openingDirectory" :aria-label="t('workflow.openInstallDir')" :title="t('workflow.openInstallDir')" @click="openInstallDirectory"><img :src="folderIcon" alt="" /></button></div>
+        </div>
+      </article>
+      <h2 class="workflow-content-label"><img :src="importantIcon" :alt="t('card.required')" />{{ t('workflow.content') }}</h2>
+      <article class="workflow-skill-content" v-html="renderedContent"></article>
+      </div>
+      <div v-show="resultTab === 'steps'" id="skill-steps-panel" class="branch-fill" role="tabpanel" aria-labelledby="skill-steps-tab">
+        <App v-if="stepsVisited" :key="result.name" :installed-skill-name="result.name" :draft-task-title="card.name" @saved="savedSteps" />
+      </div>
+    </template>
+    <div v-else-if="phase === 'done'" class="catalog-feedback">
+      <button v-if="error" class="secondary" @click="refresh">{{ t('workflow.reloadResult') }}</button>
+      <span v-else>{{ t('workflow.loadingResult') }}</span>
+    </div>
     </div>
   </section>
 </template>

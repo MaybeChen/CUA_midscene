@@ -396,7 +396,7 @@ const zhCN = {
   'workflow.publishFailed': '技能生成失败',
   'workflow.publishError': '技能处理失败，请稍后重试',
   'workflow.generatingHelp': '正在处理录制并创建可运行任务，请勿关闭页面。',
-  'workflow.publishingHelp': '正在通过宿主导入编辑后的技能，请等待导入确认。',
+  'workflow.publishingHelp': '正在打包技能并同步到 GDE，请等待导入确认。',
   'workflow.backToRecording': '返回录制',
   'workflow.backToEditing': '返回编辑',
   'workflow.retry': '再次尝试',
@@ -438,6 +438,14 @@ const zhCN = {
   'workflow.openFolderNotFound': '未找到当前录制，请刷新后重试',
   'workflow.logTruncated': '…日志较长，仅预览前2MB',
   'review.saveAndGenerate': '保存并生成Skill',
+  'workflow.resultAria': '技能生成结果',
+  'workflow.overview': 'Skill概览',
+  'workflow.taskSteps': '任务步骤',
+  'workflow.stepsSaved': '任务步骤已保存并同步到 Skill',
+  'workflow.waitingSync': '等待同步技能',
+  'workflow.reloadResult': '重新加载技能结果',
+  'workflow.loadingResult': '正在读取技能结果…',
+  'review.referenceInMemory': '参考图已在内存中更新，点击保存后同步。',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -834,7 +842,7 @@ const enUS: Record<MessageKey, string> = {
   'workflow.publishFailed': 'Skill generation failed',
   'workflow.publishError': 'Skill processing failed. Please try again later.',
   'workflow.generatingHelp': 'Processing the recording and creating a runnable task. Do not close the page.',
-  'workflow.publishingHelp': 'Importing the edited skill through the host. Wait for the import to be confirmed.',
+  'workflow.publishingHelp': 'Packaging and syncing the skill to GDE. Wait for import confirmation.',
   'workflow.backToRecording': 'Back to recording',
   'workflow.backToEditing': 'Back to editing',
   'workflow.retry': 'Try again',
@@ -876,6 +884,14 @@ const enUS: Record<MessageKey, string> = {
   'workflow.openFolderNotFound': 'The current recording was not found. Refresh and try again',
   'workflow.logTruncated': '…Log is long; only the first 2 MB are previewed',
   'review.saveAndGenerate': 'Save and generate Skill',
+  'workflow.resultAria': 'Skill generation result',
+  'workflow.overview': 'Skill Overview',
+  'workflow.taskSteps': 'Task Steps',
+  'workflow.stepsSaved': 'Task steps saved and synced to Skill',
+  'workflow.waitingSync': 'Waiting to sync skill',
+  'workflow.reloadResult': 'Reload skill result',
+  'workflow.loadingResult': 'Loading skill result…',
+  'review.referenceInMemory': 'Reference image updated in memory. Save to sync it.',
 };
 
 export const messages: Record<WorkbenchLocale, Record<MessageKey, string>> = {

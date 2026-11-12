@@ -11,3 +11,10 @@ export function recordingProgress(log: string): RecordingProgress | undefined {
   }
   return progress;
 }
+
+export function skillGenerationProgress(log: string, phase: string): RecordingProgress | undefined {
+  const trace = recordingProgress(log);
+  if (!trace) return undefined;
+  const completed = phase === 'done' ? trace.total + 1 : phase === 'publishing' ? trace.total : trace.completed;
+  return { completed, total: trace.total + 1 };
+}
