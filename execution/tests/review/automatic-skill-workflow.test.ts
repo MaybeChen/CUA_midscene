@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
@@ -9,10 +9,12 @@ import { RecordingCardStore } from '../../review/service/recording-cards.js';
 import { loadReviewSkill, saveReviewSkill } from '../../review/service/review-skill.js';
 import { recordingSkillFixture, installImportedFixture } from '../helpers/skill-import-fixture.js';
 
-async function fixture(t: TestContext, beforePublish = async () => {}) {
+async function fixture(t: TestContext, beforePublish = async () => {}, beforePrepare: (recording: string) => Promise<void> = async () => {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'automatic-skill-'));
   const assets = await recordingSkillFixture(root);
   await mkdir(assets.skillsRoot);
+  const snapshots = await Promise.all(['_trace.json', '_processed_log.json', '_processed_log_sc.json'].map(async suffix =>
+    [suffix, await readFile(path.join(assets.recording, `Recording_1${suffix}`))] as const));
   await writeFile(path.join(assets.recording, 'inputs', 'capture.mp4'), 'original-video');
   const cards = new RecordingCardStore(path.join(root, 'workbench', 'console.sqlite'));
   const card = cards.create({ name: '自动生成任务', description: '' });
@@ -20,7 +22,12 @@ async function fixture(t: TestContext, beforePublish = async () => {}) {
   const calls = { prepare: 0, publish: 0 };
   const manager = new RecordingWorkflow({ dataRoot: root, cards, skillsRoot: assets.skillsRoot, recordingsRoot: root }, {
     prepare: options => prepareRecordingSkill({ ...options, pythonExecutable: process.execPath }, {
-      runRecorder: async () => { calls.prepare++; options.progress.write('CUA_TRACE_PROGRESS {"completed":4,"total":4}\n'); },
+      runRecorder: async () => {
+        calls.prepare++;
+        for (const [suffix, bytes] of snapshots) await writeFile(path.join(options.recording, `${path.basename(options.recording)}${suffix}`), bytes);
+        await beforePrepare(options.recording);
+        options.progress.write('CUA_TRACE_PROGRESS {"completed":4,"total":4}\n');
+      },
     }),
     publish: async options => {
       calls.publish++;
@@ -34,7 +41,7 @@ async function fixture(t: TestContext, beforePublish = async () => {}) {
     },
   });
   t.after(async () => { await manager.close(); cards.close(); await rm(root, { recursive: true, force: true }); });
-  return { ...assets, card, calls, manager };
+  return { ...assets, root, cards, card, calls, manager };
 }
 
 async function until(predicate: () => boolean): Promise<void> {
@@ -83,4 +90,84 @@ test('宿主导入失败保留失败状态，手动重试只重新同步且不�
   await setup.manager.publish(setup.card.id);
   await until(() => setup.manager.status(setup.card.id).phase === 'done');
   assert.deepEqual(setup.calls, { prepare: 1, publish: 2 });
+});
+
+test('重新生成在新分析完成后清理旧资产与正式 Skill，同名导入且保留录制输入及其他文件', async t => {
+  let oldDraft = '';
+  let oldSkill = '';
+  const setup = await fixture(t, async () => {
+    if (!oldDraft) return;
+    await assert.rejects(access(oldDraft), { code: 'ENOENT' });
+    await assert.rejects(access(oldSkill), { code: 'ENOENT' });
+  }, async recording => {
+    const tracePath = path.join(recording, 'Recording_1_trace.json');
+    const trace = JSON.parse(await readFile(tracePath, 'utf8'));
+    if (oldDraft) trace.skill.goal = '重新生成后的目标';
+    await writeFile(tracePath, JSON.stringify(trace));
+  });
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'done');
+  const previous = setup.manager.status(setup.card.id);
+  oldDraft = previous.draftRoot;
+  oldSkill = path.join(setup.skillsRoot, previous.skillName);
+  await mkdir(path.join(setup.recording, 'screenshots'), { recursive: true });
+  await writeFile(path.join(setup.recording, 'screenshots', 'old-unused.png'), 'old-image');
+  await writeFile(path.join(setup.recording, 'notes.txt'), 'keep-notes');
+  await mkdir(path.join(setup.skillsRoot, 'ordinary'));
+  await writeFile(path.join(setup.skillsRoot, 'ordinary', 'SKILL.md'), 'keep ordinary');
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => ['done', 'failed'].includes(setup.manager.status(setup.card.id).phase));
+  const current = setup.manager.status(setup.card.id);
+  assert.equal(current.phase, 'done', current.error);
+  assert.equal(current.skillName, previous.skillName);
+  assert.notEqual(current.draftRoot, previous.draftRoot);
+  assert.match((await setup.manager.result(setup.card.id)).content, /重新生成后的目标/);
+  assert.match(current.log, /已清理 1 批旧生成资产/);
+  await assert.rejects(access(path.join(setup.recording, 'screenshots')), { code: 'ENOENT' });
+  assert.equal(await readFile(path.join(setup.recording, 'inputs', 'capture.mp4'), 'utf8'), 'original-video');
+  assert.equal(await readFile(path.join(setup.recording, 'inputs', 'events.txt'), 'utf8'), 'original events');
+  assert.equal(await readFile(path.join(setup.recording, 'notes.txt'), 'utf8'), 'keep-notes');
+  assert.equal(await readFile(path.join(setup.skillsRoot, 'ordinary', 'SKILL.md'), 'utf8'), 'keep ordinary');
+});
+
+test('重新分析失败保留上一版本，再次生成仍清理原版本和失败草稿', async t => {
+  let fails = false;
+  const setup = await fixture(t, async () => {}, async () => { if (fails) throw new Error('模型分析失败'); });
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'done');
+  const old = setup.manager.status(setup.card.id);
+  fails = true;
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'failed');
+  const failedDraft = setup.manager.status(setup.card.id).draftRoot;
+  await access(path.join(setup.skillsRoot, old.skillName));
+  await access(old.draftRoot);
+  fails = false;
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => ['done', 'failed'].includes(setup.manager.status(setup.card.id).phase));
+  const current = setup.manager.status(setup.card.id);
+  assert.equal(current.phase, 'done', current.error);
+  assert.equal(current.skillName, old.skillName);
+  await assert.rejects(access(old.draftRoot), { code: 'ENOENT' });
+  await assert.rejects(access(failedDraft), { code: 'ENOENT' });
+});
+
+test('重新录制后再次生成，仍能清理该卡片之前关联的 Skill 和草稿', async t => {
+  const setup = await fixture(t);
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'done');
+  const old = setup.manager.status(setup.card.id);
+  const recording = path.join(setup.root, 'Recording_2', 'inputs');
+  await mkdir(recording, { recursive: true });
+  await copyFile(path.join(setup.recording, 'inputs', 'capture.mp4'), path.join(recording, 'capture.mp4'));
+  await copyFile(path.join(setup.recording, 'inputs', 'events.txt'), path.join(recording, 'events.txt'));
+  setup.cards.beginRecording(setup.card.id); setup.cards.completeRecording('Recording_2');
+  assert.equal(setup.manager.status(setup.card.id).phase, 'idle');
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => ['done', 'failed'].includes(setup.manager.status(setup.card.id).phase));
+  const current = setup.manager.status(setup.card.id);
+  assert.equal(current.phase, 'done', current.error);
+  assert.equal(current.skillName, old.skillName);
+  await assert.rejects(access(old.draftRoot), { code: 'ENOENT' });
+  assert.equal(await readFile(path.join(recording, 'capture.mp4'), 'utf8'), 'original-video');
 });

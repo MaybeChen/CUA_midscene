@@ -93,7 +93,7 @@ test('分析停止等待处理结束，状态持久化并能在服务重开后�
   });
   await manager.analyze(card.id, 'zh-CN');
   assert.equal(manager.status(card.id).phase, 'analyzing');
-  await assert.rejects(manager.analyze(card.id, 'zh-CN'), /已有任务/);
+  await assert.rejects(manager.analyze(card.id, 'zh-CN'), /正在生成中，请先终止任务再试/);
   assert.equal((await manager.stop(card.id)).phase, 'stopped');
   await manager.close();
   const restored = new RecordingWorkflow(options);

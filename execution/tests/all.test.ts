@@ -51,6 +51,7 @@ import './review/app-safety.test.js';
 import './review/recording-cards.test.js';
 import './review/recording-workflow.test.js';
 import './review/automatic-skill-workflow.test.js';
+import './review/generation-assets.test.js';
 import './review/memory-reference-images.test.js';
 import './review/recording-progress.test.js';
 import './review/install-directory.test.js';
