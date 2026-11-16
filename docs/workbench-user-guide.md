@@ -64,3 +64,5 @@ CUA_DATA_ROOT/runs 保存报告、状态、截图与本次输入，运行历史�
 在 execution 执行 npm.cmd run typecheck、npm.cmd test、npm.cmd run build；Agent 执行 pytest、ruff 和 mypy；Record 执行 unittest discover。界面可使用独立测试 Skill 根验证，避免修改正式业务资产。
 
 旧 scene/task CLI 仅用于 CUA_DATA_ROOT/projects 中的兼容数据。新页面不使用这套目录。整体升级 Agent 和 Runtime；旧执行专用 scene/task 请求须改成 skillName，不能混搭组件。迁移策略及尚待内部确认的宿主生命周期见集成契约。
+
+首页删除流程卡片时，会一并删除该卡片关联的 GDE Skill 目录、当前及未清理的生成草稿、关联录制和最近访问记录。正在录制、生成或执行关联技能时禁止删除。清理失败保留卡片及关联记录以便重试；仅处理卡片保存的关联，不根据显示名称扫描或删除其他 Skill。

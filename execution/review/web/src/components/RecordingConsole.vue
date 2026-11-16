@@ -292,7 +292,7 @@ onUnmounted(() => {
     <ConfirmDialog
       :open="!!deleting"
       title="删除流程卡片"
-      message="删除卡片及其访问记录，原始录制文件和已生成技能会保留。"
+      message="将永久删除此流程卡片、最近访问、关联录制及生成草稿，并删除 GDE 中对应的 Skill 目录。此操作不可撤销。"
       :target="deleting?.name ?? ''"
       confirm-label="删除"
       cancel-label="取消"

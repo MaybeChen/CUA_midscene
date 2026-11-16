@@ -1,3 +1,5 @@
+import { deleteWorkflowAssets } from './workflow-deletion.js';
+import { deleteRecording } from './asset-deletion.js';
 import { replaceRecordingDraft } from './skill-replacement.js';
 import { cleanupPreviousGeneration, trackGenerationAssets } from './generation-assets.js';
 import { loadPublishedSkillResult } from './review-skill.js';
@@ -15,6 +17,7 @@ import { describeRecording, resolveRecordingDirectory, openRecordingDirectory } 
 
 export class RecordingWorkflow {
   private readonly db: Database.Database;
+  private deleting = false;
   private active?: { id: string; controller: AbortController; completion: Promise<void> };
   constructor(
     private readonly options: {
@@ -23,12 +26,14 @@ export class RecordingWorkflow {
       recordingsRoot?: string;
       executionRoot?: string;
       beforeAnalyze?: () => void;
+      beforeDelete?: (skillNames: string[]) => void;
       cards: RecordingCardStore;
     },
     private readonly dependencies: {
       prepare?: typeof prepareRecordingSkill;
       publish?: typeof publishRecordingDraft;
       replace?: typeof replaceRecordingDraft;
+      deleteRecording?: typeof deleteRecording;
     } = {},
   ) {
     this.db = new Database(path.join(options.dataRoot, 'workbench', 'console.sqlite'));
@@ -73,7 +78,7 @@ export class RecordingWorkflow {
     return !!this.active && this.status(this.active.id).recordingId === id;
   }
   isBusy(): boolean {
-    return !!this.active;
+    return !!this.active || this.deleting;
   }
   private write(value: WorkflowStatus): void {
     this.db
@@ -82,8 +87,33 @@ export class RecordingWorkflow {
       )
       .run(value);
   }
-  async analyze(id: string, language: GenerationLanguage): Promise<WorkflowStatus> {
+  async remove(id: string): Promise<void> {
+    if (this.isBusy()) throw Object.assign(new Error('任务正在处理，不能删除卡片'), { statusCode: 409 });
+    const card = this.options.cards.get(id);
+    if (this.options.cards.activeCard() === id) throw Object.assign(new Error('该卡片正在录制，请先结束录制'), { statusCode: 409 });
+    this.deleting = true;
+    try {
+      await deleteWorkflowAssets(this.options, this.storedStatus(id), async () => {
+        if (card.recordingId) await this.removeRecording(card.recordingId);
+      });
+      this.options.cards.remove(id);
+      this.db.prepare('DELETE FROM workflows WHERE cardId = ?').run(id);
+    } finally {
+      this.deleting = false;
+    }
+  }
+  private async removeRecording(recordingId: string): Promise<void> {
+    try { await (this.dependencies.deleteRecording ?? deleteRecording)(recordingId, this.options); }
+    catch (error) {
+      if ((error as { statusCode?: number }).statusCode !== 404) throw error;
+    }
+  }
+  private assertGenerationAvailable(): void {
+    if (this.deleting) throw Object.assign(new Error('正在删除流程，请稍后再试'), { statusCode: 409 });
     if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
+  }
+  async analyze(id: string, language: GenerationLanguage): Promise<WorkflowStatus> {
+    this.assertGenerationAvailable();
     this.options.beforeAnalyze?.();
     const card = this.options.cards.get(id);
     if (!card.recordingId || !this.options.skillsRoot) throw new Error('需要完整录制并配置 CUA_SKILLS_ROOT');
@@ -94,7 +124,7 @@ export class RecordingWorkflow {
     await mkdir(exportRoot, { recursive: true });
     const draftRoot = await mkdtemp(path.join(exportRoot, 'draft-'));
     const replaceSkillNames = await trackGenerationAssets(this.options.dataRoot, this.storedStatus(id), draftRoot);
-    if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
+    this.assertGenerationAvailable();
     if (this.options.cards.get(id).recordingId !== card.recordingId) throw new Error('录制关联已更新，请重新开始分析');
     const status: WorkflowStatus = {
       cardId: id,
@@ -138,7 +168,7 @@ export class RecordingWorkflow {
     } });
   }
   async publish(id: string): Promise<WorkflowStatus> {
-    if (this.active) throw Object.assign(new Error('正在生成中，请先终止任务再试。'), { statusCode: 409 });
+    this.assertGenerationAvailable();
     const status = this.status(id);
     if (!status.skillName || !['editing', 'failed'].includes(status.phase)) throw new Error('没有可发布的编辑草稿');
     if (!this.options.skillsRoot) throw new Error('请配置 CUA_SKILLS_ROOT');

@@ -26,10 +26,11 @@ export function registerRecordingCardRoutes(
   recorder: RecorderControl,
   recordings: () => Promise<RecordingCatalog>,
   busy: () => boolean = () => false,
+  removeCard: (id: string) => Promise<void> = async id => { store.remove(id); },
 ): void {
   registerCardQueries(app, store, recordings);
   registerCardWrites(app, store);
-  registerCardVisitsAndDeletion(app, store, recorder, busy);
+  registerCardVisitsAndDeletion(app, store, recorder, busy, removeCard);
   registerCardRecording(app, store, recorder, busy);
 }
 
@@ -70,14 +71,15 @@ function registerCardVisitsAndDeletion(
   store: RecordingCardStore,
   recorder: RecorderControl,
   busy: () => boolean,
+  removeCard: (id: string) => Promise<void>,
 ): void {
   app.delete<{ Params: { id: string } }>(
     '/api/recording-cards/:id',
     { schema: { params } },
     async (request) => {
       if (recorder.status().phase === 'failed') store.clearSession();
-      if (busy()) throw new Error('任务正在处理，不能删除卡片');
-      store.remove(request.params.id);
+      if (busy()) throw Object.assign(new Error('任务正在处理，不能删除卡片'), { statusCode: 409 });
+      await removeCard(request.params.id);
       return { deleted: true };
     },
   );
