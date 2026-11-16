@@ -170,7 +170,7 @@ test('导入 409 不覆盖已存在资产、不换名重传，ZIP 保留用于�
         await installImportedFixture(init!.body as FormData, options.skillsRoot);
         return Response.json({ detail: 'name exists' }, { status: 409 });
       },
-    }), /名称冲突.*HTTP 409/);
+    }), /名称冲突[\s\S]*HTTP 409/);
     assert.equal(calls, 1);
     assert.equal((await readSkill(options.skillsRoot, 'network-alarm-search')).skill.name, 'network-alarm-search');
     assert.deepEqual(await readdir(options.skillsRoot), ['network-alarm-search']);

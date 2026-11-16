@@ -71,7 +71,8 @@ const progressHeading = computed(() => {
   if (phase.value === 'publishing') return '正在同步技能';
   if (phase.value === 'stopped') return '任务已停止';
   if (phase.value === 'editing') return '等待同步技能';
-  return '任务失败';
+  if (phase.value === 'failed' && status.value?.skillName) return '技能已生成，同步失败';
+  return '技能生成失败';
 });
 async function refresh(): Promise<void> {
   if (fetching || disposed) return;
@@ -174,7 +175,8 @@ onUnmounted(() => {
                 <h3>{{ progressHeading }}</h3>
                 <p v-if="running">{{ phase === 'analyzing' ? '正在处理录制并创建可运行任务，请勿关闭页面。' : '正在同步技能到 GDE，请等待完成。' }}</p>
                 <p v-if="status.error">{{ status.error }}</p>
-                <pre v-if="displayLog">{{ displayLog }}</pre>
+                <details v-if="phase === 'failed' && displayLog" class="workflow-error-details"><summary>详细日志</summary><pre>{{ displayLog }}</pre></details>
+                <pre v-else-if="displayLog">{{ displayLog }}</pre>
               </div>
             </section>
           </div>

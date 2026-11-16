@@ -1,3 +1,4 @@
+import { networkImportError } from '../../cua/skills/import-failure.js';
 import assert from 'node:assert/strict';
 import { access, cp, copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -210,4 +211,41 @@ test('宿主响应不确定但正式目录已存在，失败重试直接替换�
   await until(() => setup.manager.status(setup.card.id).phase === 'done');
   assert.deepEqual(setup.calls, { prepare: 1, publish: 1 });
   await assert.rejects(access(path.join(formal, 'stale.txt')), { code: 'ENOENT' });
+});
+
+
+test('导入连接失败在界面保留操作建议，技术诊断只写入流程日志', async t => {
+  const failure = networkImportError({ url: new URL('http://127.0.0.1:49123/import'), zipPath: '/draft/skill.zip' },
+    new TypeError('fetch failed', { cause: Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' }) }), false);
+  const setup = await fixture(t, async () => { throw failure; });
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'failed');
+  const status = setup.manager.status(setup.card.id);
+  assert.ok(status.skillName);
+  assert.equal(status.error, failure.userMessage);
+  assert.doesNotMatch(status.error, /ZIP|ECONNREFUSED|49123|尚未确认/);
+  assert.match(status.log, /ECONNREFUSED/);
+  assert.match(status.log, /49123/);
+  assert.match(status.log, /ZIP 产物：\/draft\/skill.zip/);
+});
+
+test('分析失败与目录写入失败分别保留原因和可重试草稿', async t => {
+  let fails = true;
+  const setup = await fixture(t, async () => { throw Object.assign(new Error('write /private/skill failed'), { code: 'EACCES' }); }, async () => {
+    if (fails) throw new Error('模型服务不可用\n详细模型诊断');
+  });
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'failed');
+  const generation = setup.manager.status(setup.card.id);
+  assert.equal(generation.skillName, '');
+  assert.equal(generation.error, '模型服务不可用');
+  assert.match(generation.log, /详细模型诊断/);
+  fails = false;
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'failed');
+  const syncing = setup.manager.status(setup.card.id);
+  assert.ok(syncing.skillName);
+  assert.match(syncing.error, /目录权限/);
+  assert.doesNotMatch(syncing.error, /private/);
+  await access(path.join(syncing.draftRoot, syncing.skillName));
 });
