@@ -1,3 +1,4 @@
+import { deleteWorkflowAssets } from '../../review/service/workflow-deletion.js';
 import assert from 'node:assert/strict';
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -24,7 +25,7 @@ test('生成清理拒绝越界、当前草稿以及无法确认归属的普通 S
   await writeFile(manifest, JSON.stringify([{ ...entry, draftRoot: next }]));
   await assert.rejects(cleanupPreviousGeneration({ dataRoot: root, skillsRoot }, next), /当前生成资产/);
   await writeFile(manifest, JSON.stringify([{ ...entry, draftRoot: old }]));
-  await assert.rejects(cleanupPreviousGeneration({ dataRoot: root, skillsRoot }, next));
+  await assert.rejects(deleteWorkflowAssets({ dataRoot: root, skillsRoot }, { draftRoot: next, skillName: '', recordingId: '' } as WorkflowStatus, async () => {}));
   await access(old);
   assert.equal(await readFile(path.join(outside, 'keep.txt'), 'utf8'), 'keep');
   assert.equal(await readFile(path.join(skillsRoot, 'ordinary', 'SKILL.md'), 'utf8'), 'ordinary');

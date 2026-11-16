@@ -27,7 +27,7 @@ test('只能打开导入完成技能的正式目录，未知卡片和打开失�
     await assert.rejects(workflow.openInstallDirectory('missing-card', opener), /不存在/);
     assert.equal(opened.length, 0);
     const db = new Database(filename);
-    db.prepare('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)')
+    db.prepare('INSERT INTO workflows (cardId,recordingId,phase,skillName,draftRoot,error,log) VALUES (?,?,?,?,?,?,?)')
       .run(card.id, 'Recording_install', 'done', 'installed-demo', '', '', '');
     db.close();
     assert.deepEqual(await workflow.openInstallDirectory(card.id, opener), { opened: true, ...receipt, serverPid: process.pid });

@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import Fastify from 'fastify';
 import { RecordingCardStore } from '../../review/service/recording-cards.js';
 import { RecordingWorkflow } from '../../review/service/recording-workflow.js';
-import { replaceRecordingDraft } from '../../review/service/skill-replacement.js';
 import { deleteRecording } from '../../review/service/asset-deletion.js';
 import { registerRecordingCardRoutes } from '../../review/server/recording-card-routes.js';
 import type { RecorderControl } from '../../review/service/windows-recorder.js';
@@ -47,7 +46,7 @@ async function fixture(t: TestContext) {
       await assembleSkillFixture(path.join(draftRoot, 'linked-example'), 'linked-example');
       return 'linked-example';
     },
-    publish: options => replaceRecordingDraft(options),
+    publish: async options => { await cp(path.join(options.draftRoot, options.skillName), path.join(options.skillsRoot, options.skillName), { recursive: true }); },
     deleteSkill: async ({ skillName }) => {
       deletedSkills.push(skillName);
       if (controls.failDelete) throw new Error('GDE 删除接口失败');

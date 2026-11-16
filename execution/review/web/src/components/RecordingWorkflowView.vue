@@ -11,7 +11,7 @@ import RecordingWorkspace from './RecordingWorkspace.vue';
 import { api, request } from '../api';
 import { useI18n } from '../i18n';
 import type { RecordingCard } from '../../../shared/recording-cards';
-import type { WorkflowStatus, WorkflowResult } from '../../../shared/workflow';
+import { generatedSkillName, type WorkflowStatus, type WorkflowResult } from '../../../shared/workflow';
 const props = defineProps<{ card: RecordingCard }>();
 const { locale, t } = useI18n();
 const status = ref<WorkflowStatus>();
@@ -66,12 +66,13 @@ async function generateSkill(): Promise<void> {
 const displayLog = computed(() => (status.value?.log ?? '').replace(/^CUA_TRACE_PROGRESS .*\r?\n?/gm, ''));
 const progress = computed(() => skillGenerationProgress(status.value?.log ?? '', phase.value));
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
+const preparedName = computed(() => generatedSkillName(status.value));
 const progressHeading = computed(() => {
   if (phase.value === 'analyzing') return '正在生成任务';
   if (phase.value === 'publishing') return '正在同步技能';
   if (phase.value === 'stopped') return '任务已停止';
   if (phase.value === 'editing') return '等待同步技能';
-  if (phase.value === 'failed' && status.value?.skillName) return '技能已生成，同步失败';
+  if (phase.value === 'failed' && preparedName.value) return '技能已生成，同步失败';
   return '技能生成失败';
 });
 async function refresh(): Promise<void> {
@@ -183,7 +184,7 @@ onUnmounted(() => {
           <div class="workflow-footer">
             <template v-if="!running">
               <button class="secondary" @click="selectStep(1)">{{ '返回录制' }}</button>
-              <button class="primary" :disabled="actionBusy" @click="action(status.skillName ? 'publish' : 'analyze')">{{ '再次尝试' }}</button>
+              <button class="primary" :disabled="actionBusy" @click="action(preparedName ? 'publish' : 'analyze')">{{ '再次尝试' }}</button>
             </template>
             <button v-else-if="phase === 'analyzing'" class="secondary" :disabled="actionBusy" @click="action('stop')">{{ '停止任务' }}</button>
           </div>

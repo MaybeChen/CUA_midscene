@@ -1,3 +1,5 @@
+import Database from 'better-sqlite3';
+import { generatedSkillName } from '../../review/shared/workflow.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -100,6 +102,29 @@ test('分析停止等待处理结束，状态持久化并能在服务重开后�
   assert.equal(restored.status(card.id).phase, 'stopped');
   assert.match(restored.status(card.id).log, /步骤1/);
   await restored.close();
+  cards.close();
+  t.after(() => rm(root, { recursive: true, force: true }));
+});
+
+
+test('旧七字段工作流升级保留技能关联与日志，并可重复启动', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'workflow-migration-'));
+  const filename = path.join(root, 'workbench', 'console.sqlite');
+  const cards = new RecordingCardStore(filename);
+  const card = cards.create({ name: '旧版本流程', description: '' });
+  cards.beginRecording(card.id); cards.completeRecording('Recording_legacy');
+  const db = new Database(filename);
+  db.exec('CREATE TABLE workflows (cardId TEXT PRIMARY KEY, recordingId TEXT NOT NULL, phase TEXT NOT NULL, skillName TEXT NOT NULL, draftRoot TEXT NOT NULL, error TEXT NOT NULL, log TEXT NOT NULL)');
+  db.prepare('INSERT INTO workflows VALUES (?,?,?,?,?,?,?)').run(card.id, 'Recording_legacy', 'failed', 'legacy-skill', '', '旧诊断', '旧日志');
+  db.close();
+  for (let index = 0; index < 2; index++) {
+    const manager = new RecordingWorkflow({ dataRoot: root, cards });
+    const status = manager.status(card.id);
+    assert.equal(status.skillName, 'legacy-skill');
+    assert.equal(generatedSkillName(status), 'legacy-skill');
+    assert.equal(status.log, '旧日志');
+    await manager.close();
+  }
   cards.close();
   t.after(() => rm(root, { recursive: true, force: true }));
 });
