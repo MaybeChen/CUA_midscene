@@ -68,7 +68,7 @@ const progress = computed(() => skillGenerationProgress(status.value?.log ?? '',
 const running = computed(() => ['analyzing', 'publishing'].includes(phase.value));
 const progressHeading = computed(() => {
   if (phase.value === 'analyzing') return '正在生成任务';
-  if (phase.value === 'publishing') return '正在打包并导入技能';
+  if (phase.value === 'publishing') return '正在同步技能';
   if (phase.value === 'stopped') return '任务已停止';
   if (phase.value === 'editing') return '等待同步技能';
   return '任务失败';
@@ -172,7 +172,7 @@ onUnmounted(() => {
                   <span :style="progress ? { width: `${progress.completed / progress.total * 100}%` } : undefined"></span>
                 </div>
                 <h3>{{ progressHeading }}</h3>
-                <p v-if="running">{{ phase === 'analyzing' ? '正在处理录制并创建可运行任务，请勿关闭页面。' : '正在打包技能并同步到 GDE，请等待导入确认。' }}</p>
+                <p v-if="running">{{ phase === 'analyzing' ? '正在处理录制并创建可运行任务，请勿关闭页面。' : '正在同步技能到 GDE，请等待完成。' }}</p>
                 <p v-if="status.error">{{ status.error }}</p>
                 <pre v-if="displayLog">{{ displayLog }}</pre>
               </div>

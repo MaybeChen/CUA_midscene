@@ -4,7 +4,7 @@
 
 GDEClaw Main Agent 使用原生 Skill 机制选择任务，提交完整电脑操作目标及明确的 Skill 绑定。CUA SubAgent 只执行指定任务，不重新发现 Skill，不继续业务分析、数据提取或报告撰写。Workbench 用于人工录制、生成、复核和调试，由设置按钮通过 Keeper 启动。
 
-CUA 在独立临时目录生成并校验单个 Skill ZIP，通过 GDEClaw 原生 HTTP 导入接口安装、注册和启用。Workbench 后续直接读取、编辑和执行正式 Skill，不提供发布或同步按钮，不依赖宿主更新 API。CUA 不实现宿主内部的安装、注册、启用、签名、版本管理或 SkillHub。
+CUA 首次创建时在独立临时目录生成并校验单个 Skill ZIP，通过 GDEClaw 原生 HTTP 导入接口安装、注册和启用。Review 重新生成和失败草稿重试保留 Skill 身份，校验完整资产后直接替换对应正式目录；替换失败恢复旧目录，成功后清理旧生成资产，不重传 ZIP。Workbench 后续直接读取、编辑和执行正式 Skill，不提供发布或同步按钮，不依赖宿主更新 API。CUA 不实现宿主内部的安装、注册、启用、签名、版本管理或 SkillHub。
 
 ## 配置与版本
 

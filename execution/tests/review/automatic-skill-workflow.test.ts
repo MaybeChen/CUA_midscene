@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
-import { access, copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { prepareRecordingSkill, publishRecordingDraft } from '../../cua/skills/create.js';
 import { RecordingWorkflow } from '../../review/service/recording-workflow.js';
 import { RecordingCardStore } from '../../review/service/recording-cards.js';
+import { replaceRecordingDraft } from '../../review/service/skill-replacement.js';
 import { loadReviewSkill, saveReviewSkill } from '../../review/service/review-skill.js';
 import { recordingSkillFixture, installImportedFixture } from '../helpers/skill-import-fixture.js';
 
-async function fixture(t: TestContext, beforePublish = async () => {}, beforePrepare: (recording: string) => Promise<void> = async () => {}) {
+async function fixture(t: TestContext, beforePublish = async () => {}, beforePrepare: (recording: string) => Promise<void> = async () => {}, replace?: typeof replaceRecordingDraft) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'automatic-skill-'));
   const assets = await recordingSkillFixture(root);
   await mkdir(assets.skillsRoot);
@@ -29,6 +30,7 @@ async function fixture(t: TestContext, beforePublish = async () => {}, beforePre
         options.progress.write('CUA_TRACE_PROGRESS {"completed":4,"total":4}\n');
       },
     }),
+    replace,
     publish: async options => {
       calls.publish++;
       await beforePublish();
@@ -60,7 +62,7 @@ test('生成自动完成分析、ZIP 宿主导入和正式资源确认，未确�
     await setup.manager.analyze(setup.card.id, 'zh-CN');
     await until(() => setup.manager.status(setup.card.id).phase === 'publishing');
     await assert.rejects(setup.manager.result(setup.card.id), /尚未完成导入/);
-    await assert.rejects(setup.manager.stop(setup.card.id), /导入中不能中止/);
+    await assert.rejects(setup.manager.stop(setup.card.id), /同步中不能中止/);
     assert.match(setup.manager.status(setup.card.id).log, /正在打包并同步到 GDE/);
   } finally { release(); }
   await until(() => setup.manager.status(setup.card.id).phase === 'done');
@@ -79,30 +81,24 @@ test('生成自动完成分析、ZIP 宿主导入和正式资源确认，未确�
   assert.equal(await readFile(path.join(setup.recording, 'inputs', 'capture.mp4'), 'utf8'), 'original-video');
 });
 
-test('宿主导入失败保留失败状态，手动重试只重新同步且不重新分析', async t => {
-  let fails = true;
-  const setup = await fixture(t, async () => { if (fails) throw new Error('GDE 拒绝导入'); });
+test('宿主导入失败保留草稿，手动重试直接写入正式目录且不重新分析或重传 ZIP', async t => {
+  const setup = await fixture(t, async () => { throw new Error('GDE 拒绝导入'); });
   await setup.manager.analyze(setup.card.id, 'zh-CN');
   await until(() => setup.manager.status(setup.card.id).phase === 'failed');
   assert.match(setup.manager.status(setup.card.id).error, /GDE 拒绝导入/);
   await assert.rejects(setup.manager.result(setup.card.id), /尚未完成导入/);
-  fails = false;
   await setup.manager.publish(setup.card.id);
   await until(() => setup.manager.status(setup.card.id).phase === 'done');
-  assert.deepEqual(setup.calls, { prepare: 1, publish: 2 });
+  assert.deepEqual(setup.calls, { prepare: 1, publish: 1 });
 });
 
-test('重新生成在新分析完成后清理旧资产与正式 Skill，同名导入且保留录制输入及其他文件', async t => {
+test('重新生成直接替换同名 Skill 并清理旧资产，保留录制输入及其他文件', async t => {
   let oldDraft = '';
   let oldSkill = '';
-  const setup = await fixture(t, async () => {
-    if (!oldDraft) return;
-    await assert.rejects(access(oldDraft), { code: 'ENOENT' });
-    await assert.rejects(access(oldSkill), { code: 'ENOENT' });
-  }, async recording => {
+  const setup = await fixture(t, async () => {}, async recording => {
     const tracePath = path.join(recording, 'Recording_1_trace.json');
     const trace = JSON.parse(await readFile(tracePath, 'utf8'));
-    if (oldDraft) trace.skill.goal = '重新生成后的目标';
+    if (oldDraft) { trace.skill.name = 'new-model-name'; trace.skill.goal = '重新生成后的目标'; }
     await writeFile(tracePath, JSON.stringify(trace));
   });
   await setup.manager.analyze(setup.card.id, 'zh-CN');
@@ -110,6 +106,7 @@ test('重新生成在新分析完成后清理旧资产与正式 Skill，同名�
   const previous = setup.manager.status(setup.card.id);
   oldDraft = previous.draftRoot;
   oldSkill = path.join(setup.skillsRoot, previous.skillName);
+  await writeFile(path.join(oldSkill, 'obsolete.txt'), 'remove-old-file');
   await mkdir(path.join(setup.recording, 'screenshots'), { recursive: true });
   await writeFile(path.join(setup.recording, 'screenshots', 'old-unused.png'), 'old-image');
   await writeFile(path.join(setup.recording, 'notes.txt'), 'keep-notes');
@@ -121,6 +118,10 @@ test('重新生成在新分析完成后清理旧资产与正式 Skill，同名�
   assert.equal(current.phase, 'done', current.error);
   assert.equal(current.skillName, previous.skillName);
   assert.notEqual(current.draftRoot, previous.draftRoot);
+  assert.deepEqual(setup.calls, { prepare: 2, publish: 1 });
+  await assert.rejects(access(path.join(oldSkill, 'obsolete.txt')), { code: 'ENOENT' });
+  await assert.rejects(access(oldDraft), { code: 'ENOENT' });
+  assert.match(current.log, /替换 GDE Skill 目录/);
   assert.match((await setup.manager.result(setup.card.id)).content, /重新生成后的目标/);
   assert.match(current.log, /已清理 1 批旧生成资产/);
   await assert.rejects(access(path.join(setup.recording, 'screenshots')), { code: 'ENOENT' });
@@ -170,4 +171,43 @@ test('重新录制后再次生成，仍能清理该卡片之前关联的 Skill �
   assert.equal(current.skillName, old.skillName);
   await assert.rejects(access(old.draftRoot), { code: 'ENOENT' });
   assert.equal(await readFile(path.join(recording, 'capture.mp4'), 'utf8'), 'original-video');
+});
+
+
+test('重新生成写入失败保留旧 Skill 和草稿，重试只替换目录', async t => {
+  let fail = true;
+  const setup = await fixture(t, async () => {}, async () => {}, async options => {
+    if (fail) throw new Error('目录被占用');
+    await replaceRecordingDraft(options);
+  });
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'done');
+  const previous = setup.manager.status(setup.card.id);
+  const original = await readFile(path.join(setup.skillsRoot, previous.skillName, 'task.yaml'), 'utf8');
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'failed');
+  const failed = setup.manager.status(setup.card.id);
+  assert.match(failed.error, /目录被占用/);
+  assert.equal(await readFile(path.join(setup.skillsRoot, previous.skillName, 'task.yaml'), 'utf8'), original);
+  await access(previous.draftRoot);
+  await access(path.join(failed.draftRoot, failed.skillName));
+  fail = false;
+  await setup.manager.publish(setup.card.id);
+  await until(() => setup.manager.status(setup.card.id).phase === 'done');
+  assert.deepEqual(setup.calls, { prepare: 2, publish: 1 });
+  await assert.rejects(access(previous.draftRoot), { code: 'ENOENT' });
+});
+
+test('宿主响应不确定但正式目录已存在，失败重试直接替换已安装内容', async t => {
+  const setup = await fixture(t, async () => { throw new Error('导入结果不确定'); });
+  await setup.manager.analyze(setup.card.id, 'zh-CN');
+  await until(() => setup.manager.status(setup.card.id).phase === 'failed');
+  const failed = setup.manager.status(setup.card.id);
+  const formal = path.join(setup.skillsRoot, failed.skillName);
+  await cp(path.join(failed.draftRoot, failed.skillName), formal, { recursive: true });
+  await writeFile(path.join(formal, 'stale.txt'), 'old-host-result');
+  await setup.manager.publish(setup.card.id);
+  await until(() => setup.manager.status(setup.card.id).phase === 'done');
+  assert.deepEqual(setup.calls, { prepare: 1, publish: 1 });
+  await assert.rejects(access(path.join(formal, 'stale.txt')), { code: 'ENOENT' });
 });

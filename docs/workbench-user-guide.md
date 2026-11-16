@@ -38,7 +38,9 @@ PowerShell 可使用 npm.cmd 避免 npm.ps1 执行策略限制。服务监听 12
 
 Workbench 的新 API 使用 /api/skills/:skillName。录制生成 POST /api/recordings/:recording/skills，body={}；通过 /api/skill-generation 查询后台状态。保存直接写正式 JSON/YAML，不需要发布和宿主更新 API。
 
-原始录制位于 CUA_RECORDINGS_ROOT；生成过程复用 Python 后处理器和模型，在独立临时目录组装和校验 Skill，生成根目录平铺的单 Skill ZIP，再 POST 到 GDEClaw 的 /api/gdeclaw/skills/import?enable=true&target_name=...。multipart 文件字段为 file，不手动设置 Content-Type，不传 X-Agent-Id。导入成功后重新校验正式目录；缺少 GDECLAW_API_BASE_URL 时明确失败，不直接安装。
+原始录制位于 CUA_RECORDINGS_ROOT；首次生成过程复用 Python 后处理器和模型，在独立临时目录组装和校验 Skill，生成根目录平铺的单 Skill ZIP，再 POST 到 GDEClaw 的 /api/gdeclaw/skills/import?enable=true&target_name=...。multipart 文件字段为 file，不手动设置 Content-Type，不传 X-Agent-Id。导入成功后重新校验正式目录；缺少 GDECLAW_API_BASE_URL 时明确失败，不直接安装。
+
+重新生成和失败草稿重试直接替换 GDE 的对应 Skill 目录，不再调用 ZIP 导入。重新生成沿用原 Skill 名称，校验新资产后暂存旧目录并交换；写入或校验失败时恢复旧目录。替换成功后清理旧生成资产，保留原始录制视频和事件日志。
 
 ZIP 保留在临时导出根中，成功结果和导入失败诊断包含 ZIP 路径；它不是正式任务。临时根不能位于正式 Skill 根内，可按本机空间策略清理。现有步骤保存和图片上传使用正式根下的写锁，不调用宿主更新接口。
 
