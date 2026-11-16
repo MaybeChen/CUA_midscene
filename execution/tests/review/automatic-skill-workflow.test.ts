@@ -32,6 +32,7 @@ async function fixture(t: TestContext, beforePublish = async () => {}, beforePre
       },
     }),
     replace,
+    deleteSkill: async ({ skillName }) => { await rm(path.join(assets.skillsRoot, skillName), { recursive: true, force: true }); },
     publish: async options => {
       calls.publish++;
       await beforePublish();

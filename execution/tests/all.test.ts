@@ -59,3 +59,4 @@ import './recording/foreground-directory.test.js';
 import './review/skill-replacement.test.js';
 import './review/workflow-deletion.test.js';
 import './skill/import-errors.test.js';
+import './skill/host-delete.test.js';

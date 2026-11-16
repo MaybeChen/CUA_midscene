@@ -34,6 +34,7 @@ async function setup(configured = true) {
     layout: { catalog: {}, data: dataPaths(path.join(root, 'data')), skillsRoot: configured ? skillsRoot : undefined },
     staticRoot: root, recordingsRoot, identity: { service: 'test', protocolVersion: 4, dataRootKey: root, devMode: false },
     dependencies: {
+      deleteSkill: async ({ skillName }) => { await rm(path.join(skillsRoot, skillName), { recursive: true, force: true }); },
       recorder, execution: { status: () => ({ phase: 'idle' }), close: async () => {},
         stop: async () => ({ phase: 'idle' }), start: async request => { starts.push(request); return { phase: 'preparing' }; } },
       createSkill: async options => {

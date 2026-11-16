@@ -85,6 +85,8 @@ task.json 使用 skillName、title、description、goal、source 和 inputs，�
 
 本地 Manifest 是资产类型/版本声明，不是密码学签名或权限证明。拥有 Skill 根写权限的进程属于宿主信任边界；CUA 不替代宿主目录权限、签名与生命周期校验，也不保证对抗恶意进程持续替换目录的文件系统竞态。
 
+正式 Skill 删除调用 GDECLAW_API_BASE_URL 指向的 DELETE /api/skills/{skillName}，不直接删除正式目录。连接失败、权限错误、业务拒绝或异步受理均保留本地关联；仅明确的 Skill 不存在响应可以作为幂等结果，普通路由 404 不视为删除成功。宿主成功响应后仍校验对应目录是否已消失。
+
 ## 原生 Skill 导入
 
 单 Skill ZIP 使用 fflate 生成，文件直接位于归档根，不包含临时任务目录或 Skill 名称外层：

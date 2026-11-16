@@ -37,7 +37,8 @@ async function fixture(t: TestContext) {
   const cards = new RecordingCardStore(path.join(dataRoot, 'workbench', 'console.sqlite'));
   const card = cards.create({ name: '删除关联技能', description: '' });
   cards.beginRecording(card.id); cards.completeRecording('Recording_1'); cards.visit(card.id);
-  const controls = { failPrepare: false, failRemoval: false, executing: false, gate: undefined as Promise<void> | undefined };
+  const deletedSkills: string[] = [];
+  const controls = { failDelete: false, keepDirectory: false, failPrepare: false, failRemoval: false, executing: false, gate: undefined as Promise<void> | undefined };
   const workflow = new RecordingWorkflow({ dataRoot, skillsRoot, recordingsRoot, cards, beforeDelete: () => {
     if (controls.executing) throw Object.assign(new Error('关联 Skill 正在执行'), { statusCode: 409 });
   } }, {
@@ -47,6 +48,11 @@ async function fixture(t: TestContext) {
       return 'linked-example';
     },
     publish: options => replaceRecordingDraft(options),
+    deleteSkill: async ({ skillName }) => {
+      deletedSkills.push(skillName);
+      if (controls.failDelete) throw new Error('GDE 删除接口失败');
+      if (!controls.keepDirectory) await rm(path.join(skillsRoot, skillName), { recursive: true, force: true });
+    },
     deleteRecording: async (id, options) => {
       if (controls.gate) await controls.gate;
       if (controls.failRemoval) throw new Error('录制目录被占用');
@@ -57,7 +63,7 @@ async function fixture(t: TestContext) {
   registerRecordingCardRoutes(app, cards, { status: () => ({ phase: 'idle' }) } as RecorderControl,
     async () => ({ configured: true, envName: 'CUA_RECORDINGS_ROOT', recordings: [] }), () => workflow.isBusy(), id => workflow.remove(id));
   t.after(async () => { await app.close(); await workflow.close(); cards.close(); await rm(root, { recursive: true, force: true }); });
-  return { root, dataRoot, skillsRoot, recordingsRoot, cards, card, controls, workflow, app, url: `/api/recording-cards/${card.id}` };
+  return { root, dataRoot, skillsRoot, recordingsRoot, cards, card, controls, deletedSkills, workflow, app, url: `/api/recording-cards/${card.id}` };
 }
 
 async function generate(setup: Awaited<ReturnType<typeof fixture>>): Promise<void> {
@@ -76,6 +82,7 @@ test('首页删除清理关联 Skill、草稿、ZIP、录制及最近访问，�
   const response = await setup.app.inject({ method: 'DELETE', url: setup.url });
   assert.equal(response.statusCode, 200, response.body);
   assert.deepEqual(response.json(), { deleted: true });
+  assert.deepEqual(setup.deletedSkills, [status.skillName]);
   for (const target of [status.draftRoot, path.join(setup.skillsRoot, status.skillName), path.join(setup.recordingsRoot, 'Recording_1')]) {
     await assert.rejects(access(target), { code: 'ENOENT' });
   }
@@ -175,4 +182,35 @@ test('删除期间阻止生成、发布、录制和重复删除，录制中的�
     assert.equal(response.statusCode, 409);
   } finally { release(); await deleting; }
   assert.equal(setup.workflow.isBusy(), false);
+});
+
+
+test('GDE 删除接口失败时不清理目录、录制、草稿或卡片，主动重试继续调用接口', async t => {
+  const setup = await fixture(t);
+  await generate(setup);
+  const status = setup.workflow.status(setup.card.id);
+  setup.controls.failDelete = true;
+  assert.equal((await setup.app.inject({ method: 'DELETE', url: setup.url })).statusCode, 500);
+  await access(path.join(setup.skillsRoot, status.skillName));
+  await access(status.draftRoot);
+  await access(path.join(setup.recordingsRoot, 'Recording_1'));
+  assert.equal(setup.cards.get(setup.card.id).name, '删除关联技能');
+  assert.equal(setup.cards.recent().length, 1);
+  assert.match(setup.workflow.status(setup.card.id).log, /GDE 删除接口失败/);
+  setup.controls.failDelete = false;
+  assert.equal((await setup.app.inject({ method: 'DELETE', url: setup.url })).statusCode, 200);
+  assert.deepEqual(setup.deletedSkills, [status.skillName, status.skillName]);
+});
+
+test('GDE 返回成功但目录仍存在时保留关联，不退回到本地删除', async t => {
+  const setup = await fixture(t);
+  await generate(setup);
+  const status = setup.workflow.status(setup.card.id);
+  setup.controls.keepDirectory = true;
+  const response = await setup.app.inject({ method: 'DELETE', url: setup.url });
+  assert.equal(response.statusCode, 500);
+  assert.match(response.body, /目录仍存在/);
+  await access(path.join(setup.skillsRoot, status.skillName, 'task.yaml'));
+  await access(status.draftRoot);
+  assert.equal(setup.cards.get(setup.card.id).name, '删除关联技能');
 });
