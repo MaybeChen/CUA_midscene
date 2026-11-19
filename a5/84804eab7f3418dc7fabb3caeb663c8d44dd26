@@ -1,0 +1,28 @@
+.gitignore
+  h_da32729ff218bd 22-23
+agent/src/cua_agent/openai_compatible.py
+  h_da32729ff218bd 33-58,60-81,92,102,129,152,160,162,176-178,181-184,186-188,194-222,255,258,267-269
+agent/src/cua_agent/runner.py
+  h_da32729ff218bd 8,31,47,180-189
+execution/cua/skills/host-delete.ts
+  h_da32729ff218bd 61-84,97
+execution/review/service/review-skill.ts
+  h_da32729ff218bd 77-83
+execution/review/service/task-mutations.ts
+  h_da32729ff218bd 1-168
+execution/review/service/workflow-deletion.ts
+  h_da32729ff218bd 3,10
+recorder/src/cua_recorder/hotkey.py
+  h_da32729ff218bd 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5+huawei.3",
+  "base_commit_sha": "a584804eab7f3418dc7fabb3caeb663c8d44dd26",
+  "prompts": {},
+  "humans": {
+    "h_da32729ff218bd": {
+      "author": "c30046905 <chenchao256@huawei.com>"
+    }
+  }
+}
