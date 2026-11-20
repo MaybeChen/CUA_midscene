@@ -103,6 +103,39 @@ test('WindowsRecorderManager 将 Worker 首帧前失败暴露为 failed', async 
   await manager.close();
 });
 
+test('WindowsRecorderManager 保留录制完成后的窗口激活警告且不将资产标为失败', async () => {
+  const fixture = await recorderFixture();
+  const outputRoot = path.join(fixture.root, 'recordings');
+  await mkdir(outputRoot);
+  const child = childProcess();
+  const completed: string[] = [];
+  const manager = new WindowsRecorderManager({
+    executionRoot: fixture.executionRoot, pythonExecutable: fixture.pythonExecutable,
+    recordingsRoot: outputRoot, onRecordingCompleted: id => completed.push(id),
+    spawnProcess: (() => {
+      queueMicrotask(() => child.stdout.write(`${JSON.stringify({ event: 'armed' })}\n`));
+      child.stdin.once('data', () => {
+        child.stdout.write(`${JSON.stringify({
+          event: 'completed', recording_id: 'Recording_test', console_foreground: false,
+          focus_warning: '录制已保存，但未能将控制台切到前台：窗口已关闭',
+        })}\n`);
+        queueMicrotask(() => child.emit('close', 0, null));
+      });
+      return child;
+    }) as any,
+  });
+  await manager.start('display-0');
+  const result = await manager.stop();
+  assert.equal(result.phase, 'idle');
+  assert.match(result.focusWarning ?? '', /录制已保存.*窗口已关闭/);
+  assert.equal(result.error, undefined);
+  assert.deepEqual(completed, ['Recording_test']);
+  assert.equal((await manager.start('display-0')).focusWarning, undefined);
+  child.stdout.write(`${JSON.stringify({ event: 'cancelled' })}\n`);
+  child.emit('close', 0, null);
+  await manager.close();
+});
+
 test('WindowsRecorderManager 要求录制输出根并支持显示器预览边界', async () => {
   const fixture = await recorderFixture();
   const preview = path.join(fixture.root, 'preview.png');
