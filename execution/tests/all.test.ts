@@ -49,6 +49,7 @@ import './review/execution-workspace.test.js';
 import './review/app-safety.test.js';
 
 import './review/recording-cards.test.js';
+import './review/skill-card-sync.test.js';
 import './review/recording-workflow.test.js';
 import './review/automatic-skill-workflow.test.js';
 import './review/generation-assets.test.js';

@@ -79,7 +79,7 @@ function date(value: string): string {
           </div>
           <p class="card-description">{{ card.description }}</p>
         </button>
-        <span v-if="!card.recordingId" class="card-pending">待录制</span>
+        <span v-if="!card.recordingId && !card.skillName" class="card-pending">待录制</span>
         <div class="card-bottom">
           <button class="card-time" :aria-label="`打开 ${card.name}`" @click="emit('open', card)"><time :datetime="card.updatedAt">{{ date(card.updatedAt) }}</time></button>
           <div class="card-actions">

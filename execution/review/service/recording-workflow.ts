@@ -7,6 +7,8 @@ import { clearGenerationBackups } from './generation-backup.js';
 import { cleanupPreviousGeneration, trackGenerationAssets } from './generation-assets.js';
 import { loadPublishedSkillResult } from './review-skill.js';
 import type { WorkflowResult } from '../shared/workflow.js';
+import { synchronizeSkillCards } from './skill-card-sync.js';
+import type { RecordingCardInput, RecordingCardSyncResult } from '../shared/recording-cards.js';
 import Database from 'better-sqlite3';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,6 +23,7 @@ import { describeRecording, resolveRecordingDirectory, openRecordingDirectory } 
 export class RecordingWorkflow {
   private readonly db: Database.Database;
   private deleting = false;
+  private skillSync?: Promise<RecordingCardSyncResult>;
   private active?: { id: string; controller: AbortController; completion: Promise<void> };
   constructor(
     private readonly options: {
@@ -57,7 +60,7 @@ export class RecordingWorkflow {
   status(id: string): WorkflowStatus {
     const card = this.options.cards.get(id);
     const row = this.storedStatus(id);
-    if (row && row.recordingId === card.recordingId) return row;
+    if (row && row.recordingId === (card.recordingId ?? '')) return row;
     return {
       cardId: id,
       recordingId: card.recordingId ?? '',
@@ -91,6 +94,37 @@ export class RecordingWorkflow {
         'INSERT OR REPLACE INTO workflows (cardId,recordingId,phase,skillName,draftRoot,error,log,pendingSkillName) VALUES (@cardId,@recordingId,@phase,@skillName,@draftRoot,@error,@log,@pendingSkillName)',
       )
       .run({ ...value, pendingSkillName: value.pendingSkillName ?? null });
+  }
+
+  private linkedSkillNames(): Set<string> {
+    const ids = new Set(this.options.cards.all().map(card => card.id));
+    const rows = this.db.prepare('SELECT * FROM workflows').all() as WorkflowStatus[];
+    return new Set(rows.filter(row => ids.has(row.cardId))
+      .flatMap(row => [row.skillName, row.pendingSkillName ?? '']).filter(Boolean));
+  }
+
+  synchronizeSkills(): Promise<RecordingCardSyncResult> {
+    if (this.skillSync) return this.skillSync;
+    this.skillSync = synchronizeSkillCards({
+      skillsRoot: this.options.skillsRoot,
+      linkedNames: () => this.linkedSkillNames(),
+      importSkill: input => this.importSkillCard(input),
+    }).finally(() => { this.skillSync = undefined; });
+    return this.skillSync;
+  }
+
+  private importSkillCard(input: RecordingCardInput): boolean {
+    if (this.deleting) throw new Error('正在删除任务，请稍后重新同步技能列表');
+    if (this.linkedSkillNames().has(input.name)) return false;
+    const card = this.options.cards.create(input);
+    try {
+      this.write({ cardId: card.id, recordingId: '', phase: 'done', skillName: input.name,
+        draftRoot: '', error: '', log: '' });
+    } catch (error) {
+      this.options.cards.remove(card.id);
+      throw error;
+    }
+    return true;
   }
   async remove(id: string): Promise<void> {
     if (this.isBusy()) throw Object.assign(new Error('任务正在处理，不能删除卡片'), { statusCode: 409 });
@@ -248,6 +282,7 @@ export class RecordingWorkflow {
   async close(): Promise<void> {
     if (this.active && this.status(this.active.id).phase === 'analyzing') this.active.controller.abort();
     await this.active?.completion;
+    await this.skillSync;
     this.db.close();
   }
 }

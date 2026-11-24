@@ -66,6 +66,10 @@ export class RecordingCardStore {
     return card;
   }
 
+  all(): RecordingCard[] {
+    return this.db.prepare(`SELECT ${columns} FROM recording_cards`).all() as RecordingCard[];
+  }
+
   create(input: RecordingCardInput): RecordingCard {
     const id = randomUUID();
     const now = new Date().toISOString();
