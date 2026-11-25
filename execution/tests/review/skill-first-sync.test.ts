@@ -98,11 +98,11 @@ test('录制已有卡片时复用该卡片并迁移孤立工作流，持久化�
   assert.equal(rows[0].cardId, original.id);
 });
 
-test('暂缺资产保留历史映射和可用 Skill，目录恢复后在同一卡片补齐关联', async t => {
+test('暂缺资产不提示错误并保留历史映射，目录恢复后在同一卡片补齐关联', async t => {
   const setup = await fixture(t);
   await rm(path.join(setup.recordingsRoot, 'Recording_linked'), { recursive: true });
   const result = await setup.workflow.synchronizeSkills();
-  assert.match(result.warnings.join('\n'), /保留历史映射/);
+  assert.deepEqual(result.warnings, []);
   assert.equal(setup.cards.get('original-card').recordingId, null);
   assert.equal((await setup.workflow.result('original-card')).name, 'linked-task');
   assert.equal(readWorkflowMetadata(setup.root)[0].recordingId, 'Recording_linked');
