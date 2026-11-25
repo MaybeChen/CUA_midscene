@@ -26,7 +26,7 @@ async function fixture(t: TestContext) {
   registerRecordingCardRoutes(app, cards, { status: () => ({ phase: 'idle' }) } as RecorderControl,
     async () => ({ configured: false, envName: 'CUA_RECORDINGS_ROOT', recordings: [] }),
     () => workflow.isBusy(), id => workflow.remove(id), {
-      synchronize: () => workflow.synchronizeSkills(),
+      synchronize: entries => workflow.synchronizeSkills(entries),
       skillName: id => workflow.status(id).skillName || undefined,
     });
   registerWorkflowRoutes(app, workflow);

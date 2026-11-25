@@ -6,6 +6,7 @@ import test, { type TestContext } from 'node:test';
 import Fastify from 'fastify';
 import { RecordingCardStore } from '../../review/service/recording-cards.js';
 import { RecordingWorkflow } from '../../review/service/recording-workflow.js';
+import { readWorkflowMetadata } from '../helpers/workflow-metadata-fixture.js';
 import { deleteRecording } from '../../review/service/asset-deletion.js';
 import { registerRecordingCardRoutes } from '../../review/server/recording-card-routes.js';
 import type { RecorderControl } from '../../review/service/windows-recorder.js';
@@ -86,6 +87,7 @@ test('首页删除清理关联 Skill、草稿、ZIP、录制及最近访问，�
     await assert.rejects(access(target), { code: 'ENOENT' });
   }
   assert.throws(() => setup.cards.get(setup.card.id), /不存在/);
+  assert.ok(!readWorkflowMetadata(setup.dataRoot).some(row => row.cardId === setup.card.id));
   assert.deepEqual(setup.cards.recent(), []);
   await access(path.join(unrelated, 'task.yaml'));
 });
@@ -196,9 +198,13 @@ test('GDE 删除接口失败时不清理目录、录制、草稿或卡片，主�
   assert.equal(setup.cards.get(setup.card.id).name, '删除关联技能');
   assert.equal(setup.cards.recent().length, 1);
   assert.match(setup.workflow.status(setup.card.id).log, /GDE 删除接口失败/);
+  const persisted = readWorkflowMetadata(setup.dataRoot).find(row => row.cardId === setup.card.id);
+  assert.equal(persisted?.skillName, status.skillName);
+  assert.match(persisted?.log ?? '', /GDE 删除接口失败/);
   setup.controls.failDelete = false;
   assert.equal((await setup.app.inject({ method: 'DELETE', url: setup.url })).statusCode, 200);
   assert.deepEqual(setup.deletedSkills, [status.skillName, status.skillName]);
+  assert.ok(!readWorkflowMetadata(setup.dataRoot).some(row => row.cardId === setup.card.id));
 });
 
 test('GDE 返回成功但目录仍存在时保留关联，不退回到本地删除', async t => {

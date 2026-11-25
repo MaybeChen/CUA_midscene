@@ -70,8 +70,7 @@ export class RecordingCardStore {
     return this.db.prepare(`SELECT ${columns} FROM recording_cards`).all() as RecordingCard[];
   }
 
-  create(input: RecordingCardInput): RecordingCard {
-    const id = randomUUID();
+  create(input: RecordingCardInput, id: string = randomUUID()): RecordingCard {
     const now = new Date().toISOString();
     this.db
       .prepare(
@@ -80,6 +79,19 @@ export class RecordingCardStore {
       )
       .run(id, input.name.trim(), input.description.trim(), now, now);
     return this.get(id);
+  }
+
+  associateRecording(id: string, recordingId: string): void {
+    const card = this.get(id);
+    if (card.recordingId === recordingId) return;
+    if (card.recordingId) throw failure('卡片已有其他录制，不能覆盖当前关联', 409);
+    const owner = this.db.prepare('SELECT id FROM recording_cards WHERE recording_id = ?').get(recordingId);
+    if (owner) throw failure('录制资产已关联其他卡片', 409);
+    this.db.transaction(() => {
+      this.db.prepare('UPDATE recording_cards SET recording_id = ?, updated_at = ?, version = version + 1 WHERE id = ?')
+        .run(recordingId, new Date().toISOString(), id);
+      this.db.prepare('INSERT OR IGNORE INTO recording_imports VALUES (?)').run(recordingId);
+    })();
   }
 
   update(
@@ -155,13 +167,13 @@ export class RecordingCardStore {
     this.db.prepare('DELETE FROM recording_cards WHERE id = ?').run(id);
   }
 
-  importRecordings(entries: RecordingEntry[]): void {
+  importRecordings(entries: RecordingEntry[], restoreMissingCards = false): void {
     this.db.transaction(() => {
       for (const entry of entries) {
         const imported = this.db
           .prepare('INSERT OR IGNORE INTO recording_imports VALUES (?)')
           .run(entry.id);
-        if (!imported.changes) continue;
+        if (!imported.changes && !restoreMissingCards) continue;
         if (this.db.prepare('SELECT id FROM recording_cards WHERE recording_id = ?').get(entry.id)) continue;
         const card = this.create({ name: entry.id, description: '' });
         this.db

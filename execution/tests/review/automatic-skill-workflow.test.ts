@@ -8,6 +8,7 @@ import { RecordingCardStore } from '../../review/service/recording-cards.js';
 import { loadReviewSkill, saveReviewSkill } from '../../review/service/review-skill.js';
 import { recordingSkillFixture } from '../helpers/skill-import-fixture.js';
 import { workflowHostFixture } from '../helpers/workflow-host-fixture.js';
+import { readWorkflowMetadata } from '../helpers/workflow-metadata-fixture.js';
 
 async function fixture(t: TestContext, beforePrepare: (recording: string) => Promise<void> = async () => {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'automatic-skill-'));
@@ -93,6 +94,11 @@ test('模型返回不同名称时使用旧 name 删除、新 name 导入，成�
   const current = await generate(setup);
   assert.equal(current.phase, 'done', current.error);
   assert.equal(current.skillName, 'new-model-name');
+  const persisted = readWorkflowMetadata(setup.root);
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].skillName, current.skillName);
+  assert.equal(persisted[0].recordingId, 'Recording_1');
+  assert.equal(persisted[0].pendingSkillName, '');
   assert.deepEqual(setup.calls.requests.slice(1), [{ method: 'DELETE', name: old.skillName }, { method: 'POST', name: current.skillName }]);
   await assert.rejects(access(path.join(setup.skillsRoot, old.skillName)), { code: 'ENOENT' });
 });
