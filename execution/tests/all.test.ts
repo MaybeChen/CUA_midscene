@@ -47,6 +47,7 @@ import './review/execution-report.test.js';
 import './review/execution-feedback.test.js';
 import './review/execution-workspace.test.js';
 import './review/app-safety.test.js';
+import './review/unsaved-changes.test.js';
 
 import './review/recording-cards.test.js';
 import './review/skill-card-sync.test.js';

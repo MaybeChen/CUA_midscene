@@ -10,6 +10,7 @@ import * as evidenceMode from '../../review/web/src/evidence-mode.js';
 import * as referenceUpload from '../../review/shared/reference-upload.js';
 import { ApiError } from '../../review/web/src/api.js';
 import { ReviewDraftStorage } from '../../review/web/src/draft-storage.js';
+import { useUnsavedChanges } from '../../review/web/src/unsaved-changes.js';
 import { translate, type MessageKey, type TranslationParams } from '../../review/web/src/i18n.js';
 import type { ReviewMutation, ReviewSkillView } from '../../review/shared/types.js';
 import { applyReviewMutation } from '../../review/shared/task-mutations.js';
@@ -40,6 +41,7 @@ async function setupApp(props: { installedSkillName?: string } = {}) {
     if (id === './api') return { ApiError, api };
     if (id.endsWith('/step-editor')) return stepEditor;
     if (id === './draft-storage') return { ReviewDraftStorage };
+    if (id === './unsaved-changes') return { useUnsavedChanges };
     if (id === './evidence-mode') return evidenceMode;
     if (id.endsWith('/reference-upload')) return referenceUpload;
     if (id === './i18n') return { useI18n: () => ({
@@ -49,9 +51,17 @@ async function setupApp(props: { installedSkillName?: string } = {}) {
     return require(id);
   };
   const exports: { default?: { setup: (props: object, context: object) => any } } = {};
-  new Function('require', 'exports', 'window', compiledApp)(load, exports, { location: { search: '', href: 'http://127.0.0.1:47831/' }, history: { replaceState() {} } });
+  const browserWindow = Object.assign(new EventTarget(), {
+    location: { search: '', href: 'http://127.0.0.1:47831/' }, history: { replaceState() {} },
+  });
+  new Function('require', 'exports', 'window', compiledApp)(load, exports, browserWindow);
   const scope = vue.effectScope();
   const app = scope.run(() => exports.default!.setup(props, { expose() {}, emit() {} }))!;
+  initializeEditor(app);
+  return { app, browserWindow, mutations, uploadCalls: () => uploadCalls, succeed: () => { failMutation = false; }, stop: () => scope.stop() };
+}
+
+function initializeEditor(app: any): void {
   const manifest = {
     schemaVersion: '0.3', skillName: 'task', title: '任务', description: '', goal: '',
     source: { tracePath: 'source/trace.json', processedLogPath: 'source/processed.json', conversionCommand: '' }, inputs: {},
@@ -68,8 +78,44 @@ async function setupApp(props: { installedSkillName?: string } = {}) {
   app.draft.value = structuredClone({ manifest, document: view.document });
   app.rebuildSteps();
   app.populateEditor();
-  return { app, mutations, uploadCalls: () => uploadCalls, succeed: () => { failMutation = false; }, stop: () => scope.stop() };
 }
+
+function preventedClose(target: EventTarget): boolean {
+  const event = new Event('beforeunload', { cancelable: true });
+  Object.defineProperty(event, 'returnValue', { value: '', writable: true });
+  target.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+test('步骤编辑和结构调整驱动关闭拦截，只读和销毁时不残留监听', async () => {
+  const setup = await setupApp({ installedSkillName: 'task' });
+  try {
+    assert.equal(preventedClose(setup.browserWindow), false);
+    setup.app.editor.target = '尚未保存的目标';
+    assert.equal(preventedClose(setup.browserWindow), true);
+    setup.app.changes.value = [];
+    assert.equal(preventedClose(setup.browserWindow), false);
+    await setup.app.insertStep();
+    assert.equal(preventedClose(setup.browserWindow), true);
+    setup.app.view.value.writable = false;
+    assert.equal(preventedClose(setup.browserWindow), false);
+  } finally { setup.stop(); }
+  assert.equal(preventedClose(setup.browserWindow), false);
+});
+
+test('高级编辑中尚未应用或无效的 JSON 也阻止关闭，取消编辑后解除', async () => {
+  const setup = await setupApp({ installedSkillName: 'task' });
+  try {
+    setup.app.enableAdvancedEditing();
+    assert.equal(preventedClose(setup.browserWindow), false);
+    setup.app.advancedFlowText.value = '[无效 JSON';
+    assert.equal(preventedClose(setup.browserWindow), true);
+    setup.app.applyAdvancedEditor();
+    assert.equal(preventedClose(setup.browserWindow), true);
+    setup.app.cancelAdvancedEditing();
+    assert.equal(preventedClose(setup.browserWindow), false);
+  } finally { setup.stop(); }
+});
 
 test('结果页步骤修改和选图只在内存中进行，不调用变更或上传接口', async () => {
   const setup = await setupApp({ installedSkillName: 'task' });
